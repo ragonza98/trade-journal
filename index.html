@@ -35,6 +35,7 @@
     .label { display: block; font-size: 12px; font-weight: 600; color: #94a3b8; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
     .win-badge { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
     .loss-badge { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
+    .missed-badge { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: flex; align-items: center; justify-content: center; }
     .modal { background: #0d1424; border: 1px solid #1e293b; border-radius: 12px; padding: 28px; width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
     .checkbox-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
@@ -148,11 +149,14 @@ const LOSS_REASONS = ['Impulsive', 'Too zoomed in', 'Forced', 'No setup', 'No cl
 const DEFAULT_SETUPS = ['OTE', 'OTE RP', 'OFR', 'Failed Long', 'Failed Short', 'IFVG'];
 const DEFAULT_ENTRY_TYPES = ['Aggressive MSS', 'Retracement MSS', 'Aggressive iFVG', 'Retracement iFVG'];
 const DEFAULT_ENTRY_TRIGGERS = ['Protected swing break', 'iFVG', 'Anticipation'];
+const DEFAULT_MISSED_REASONS = ['Not at screen', 'Hesitation', 'Already in a trade', 'Missed entry', 'Didn\'t trust setup', 'Risk limit reached'];
 
 // ============================================================
 //  HELPERS
 // ============================================================
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+function outcomeBadge(outcome) { return outcome === 'Win' ? 'win-badge' : outcome === 'Missed' ? 'missed-badge' : 'loss-badge'; }
+function outcomeColor(outcome) { return outcome === 'Win' ? '#10b981' : outcome === 'Missed' ? '#f59e0b' : '#ef4444'; }
 function formatTime(t) {
   if (!t) return '—';
   const [h, m] = t.split(':').map(Number);
@@ -189,17 +193,20 @@ function navigate(view, opts = {}) {
 // ============================================================
 function calcStats(trades) {
   if (!trades.length) return null;
+  const executed = trades.filter(t => t.outcome !== 'Missed');
+  const missed = trades.filter(t => t.outcome === 'Missed');
   const wins = trades.filter(t => t.outcome === 'Win');
   const losses = trades.filter(t => t.outcome === 'Loss');
-  const totalPnl = trades.reduce((s, t) => s + (t.outcome === 'Win' ? t.dollarAmount : -t.dollarAmount), 0);
-  const winRate = trades.length ? (wins.length / trades.length) * 100 : 0;
+  const totalPnl = executed.reduce((s, t) => s + (t.outcome === 'Win' ? t.dollarAmount : -t.dollarAmount), 0);
+  const winRate = executed.length ? (wins.length / executed.length) * 100 : 0;
   const avgWin = wins.length ? wins.reduce((s, t) => s + t.dollarAmount, 0) / wins.length : 0;
   const avgLoss = losses.length ? losses.reduce((s, t) => s + t.dollarAmount, 0) / losses.length : 0;
-  const avgR = trades.length ? trades.reduce((s, t) => s + (t.outcome === 'Win' ? t.realizedR : -t.realizedR), 0) / trades.length : 0;
+  const avgR = executed.length ? executed.reduce((s, t) => s + (t.outcome === 'Win' ? t.realizedR : -(t.realizedR||0)), 0) / executed.length : 0;
   const grossWin = wins.reduce((s, t) => s + t.dollarAmount, 0);
   const grossLoss = losses.reduce((s, t) => s + t.dollarAmount, 0);
   const profitFactor = grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0;
-  return { wins: wins.length, losses: losses.length, total: trades.length, totalPnl, winRate, avgWin, avgLoss, avgR, profitFactor };
+  const potentialR = missed.reduce((s, t) => s + (t.realizedR || 0), 0);
+  return { wins: wins.length, losses: losses.length, missed: missed.length, total: executed.length, totalPnl, winRate, avgWin, avgLoss, avgR, profitFactor, potentialR };
 }
 
 function calcSetupStats(trades) {
@@ -330,7 +337,7 @@ function renderDashboard() {
       ${statCard('Total Trades', stats ? stats.total : 0, null, '#8b5cf6')}
       ${statCard('Avg Win', stats && stats.wins > 0 ? fmt$(stats.avgWin) : '—', null, '#10b981')}
       ${statCard('Avg Loss', stats && stats.losses > 0 ? '-$'+Math.abs(stats.avgLoss).toFixed(2) : '—', null, '#ef4444')}
-      ${statCard('Avg R', stats ? fmtR(stats.avgR) : '—', null, '#f59e0b')}
+      ${statCard('Missed Trades', stats ? stats.missed : 0, null, '#f59e0b')}
     </div>
 
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-bottom:24px">
@@ -357,9 +364,9 @@ function renderDashboard() {
             <td>${t.date}</td>
             <td><span class="tag">${escHtml(t.setup)}</span></td>
             <td><span style="color:${t.direction==='Long'?'#10b981':'#ef4444'}">${t.direction}</span></td>
-            <td><span class="${t.outcome==='Win'?'win-badge':'loss-badge'}">${t.outcome}</span></td>
-            <td style="color:${t.outcome==='Win'?'#10b981':'#ef4444'}">${t.outcome==='Win'?'+':'-'}$${Math.abs(t.dollarAmount).toFixed(2)}</td>
-            <td style="color:${t.outcome==='Win'?'#10b981':'#ef4444'}">${t.outcome==='Win'?'+':'-'}${(t.realizedR||0).toFixed(2)}R</td>
+            <td><span class="${outcomeBadge(t.outcome)}">${t.outcome}</span></td>
+            <td style="color:${outcomeColor(t.outcome)}">${t.outcome==='Win'?'+':t.outcome==='Missed'?'~':'-'}$${Math.abs(t.dollarAmount||0).toFixed(2)}</td>
+            <td style="color:${outcomeColor(t.outcome)}">${t.outcome==='Win'?'+':t.outcome==='Missed'?'~':'-'}${(t.realizedR||0).toFixed(2)}R</td>
           </tr>`).join('')}
         </tbody>
       </table>` : '<div style="text-align:center;color:#64748b;padding:30px">No trades yet. <button class="btn-primary btn-sm" onclick="navigate(\'newTrade\')" style="margin-left:8px">Log your first trade</button></div>'}
@@ -472,10 +479,11 @@ function renderNewTrade() {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
           <div>
             <label class="label">Outcome</label>
-            <select name="outcome" class="form-select" id="outcomeSelect" onchange="updateOutcomeReasons(this.value,[]); saveDraft()" required>
+            <select name="outcome" class="form-select" id="outcomeSelect" onchange="updateOutcomeReasons(this.value,[]); updateMissedFields(this.value); saveDraft()" required>
               <option value="">Select...</option>
               <option value="Win" ${v('outcome')==='Win'?'selected':''}>Win</option>
               <option value="Loss" ${v('outcome')==='Loss'?'selected':''}>Loss</option>
+              <option value="Missed" ${v('outcome')==='Missed'?'selected':''}>Missed Trade</option>
             </select>
           </div>
           <div>
@@ -488,9 +496,25 @@ function renderNewTrade() {
           </div>
         </div>
         <div style="margin-bottom:14px">
-          <label class="label">Outcome Reason <span style="color:#64748b;text-transform:none;font-weight:400">(select all that apply)</span></label>
+          <label class="label" id="outcomeReasonsLabel">Outcome Reason <span style="color:#64748b;text-transform:none;font-weight:400">(select all that apply)</span></label>
           <div id="outcomeReasons" class="checkbox-group">
             <div style="color:#64748b;font-size:13px">Select an outcome first</div>
+          </div>
+        </div>
+        <div id="missedFields" style="display:${v('outcome')==='Missed'?'block':'none'}">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+            <div>
+              <label class="label">Hypothetical Outcome</label>
+              <select name="hypotheticalOutcome" class="form-select" onchange="saveDraft()">
+                <option value="">Unknown</option>
+                <option value="Win" ${v('hypotheticalOutcome')==='Win'?'selected':''}>Would have been a Win</option>
+                <option value="Loss" ${v('hypotheticalOutcome')==='Loss'?'selected':''}>Would have been a Loss</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Potential $ Amount</label>
+              <input type="number" name="dollarAmountMissed" class="form-input" placeholder="e.g. 500" step="0.01" min="0" value="${v('dollarAmount')}" oninput="calcRealizedR();saveDraft()">
+            </div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
@@ -725,9 +749,9 @@ function renderHistory() {
             <td><span class="tag">${escHtml(t.setup)}</span></td>
             <td style="color:${(t.confidence||5)>=8?'#10b981':(t.confidence||5)>=5?'#f59e0b':'#ef4444'};font-weight:600">${t.confidence||'—'}/10</td>
             <td><span style="color:${t.direction==='Long'?'#10b981':'#ef4444'};font-weight:600">${t.direction||'—'}</span></td>
-            <td><span class="${t.outcome==='Win'?'win-badge':'loss-badge'}">${t.outcome}</span></td>
-            <td style="color:${t.outcome==='Win'?'#10b981':'#ef4444'};font-weight:600">${t.outcome==='Win'?'+':'-'}$${Math.abs(t.dollarAmount||0).toFixed(2)}</td>
-            <td style="color:${t.outcome==='Win'?'#10b981':'#ef4444'}">${t.outcome==='Win'?'+':'-'}${(t.realizedR||0).toFixed(2)}R</td>
+            <td><span class="${outcomeBadge(t.outcome)}">${t.outcome}</span></td>
+            <td style="color:${outcomeColor(t.outcome)};font-weight:600">${t.outcome==='Win'?'+':t.outcome==='Missed'?'~':'-'}$${Math.abs(t.dollarAmount||0).toFixed(2)}</td>
+            <td style="color:${outcomeColor(t.outcome)}">${t.outcome==='Win'?'+':t.outcome==='Missed'?'~':'-'}${(t.realizedR||0).toFixed(2)}R</td>
             <td>${t.rr||'—'}</td>
           </tr>`).join('')}
         </tbody>
@@ -765,15 +789,15 @@ async function renderTradeDetailAsync(tradeId) {
     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:20px">
       <div class="stat-card">
         <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">Outcome</div>
-        <span class="${t.outcome==='Win'?'win-badge':'loss-badge'}" style="font-size:16px;padding:4px 12px">${t.outcome}</span>
+        <span class="${outcomeBadge(t.outcome)}" style="font-size:16px;padding:4px 12px">${t.outcome}</span>
       </div>
       <div class="stat-card">
-        <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">P&L</div>
-        <div style="font-size:20px;font-weight:700;color:${t.outcome==='Win'?'#10b981':'#ef4444'}">${t.outcome==='Win'?'+':'-'}$${Math.abs(t.dollarAmount||0).toFixed(2)}</div>
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">${t.outcome==='Missed'?'Potential P&L':'P&L'}</div>
+        <div style="font-size:20px;font-weight:700;color:${outcomeColor(t.outcome)}">${t.outcome==='Win'?'+':t.outcome==='Missed'?'~':'-'}$${Math.abs(t.dollarAmount||0).toFixed(2)}</div>
       </div>
       <div class="stat-card">
-        <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">Realized R</div>
-        <div style="font-size:20px;font-weight:700;color:${t.outcome==='Win'?'#10b981':'#ef4444'}">${t.outcome==='Win'?'+':'-'}${(t.realizedR||0).toFixed(2)}R</div>
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">${t.outcome==='Missed'?'Potential R':'Realized R'}</div>
+        <div style="font-size:20px;font-weight:700;color:${outcomeColor(t.outcome)}">${t.outcome==='Win'?'+':t.outcome==='Missed'?'~':'-'}${(t.realizedR||0).toFixed(2)}R</div>
       </div>
       <div class="stat-card">
         <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">Intended RR</div>
@@ -977,8 +1001,9 @@ function renderSettings() {
   const setups = j.setups || DEFAULT_SETUPS;
   const winReasons = j.winReasons || WIN_REASONS;
   const lossReasons = j.lossReasons || LOSS_REASONS;
-  const entryTypes = j.entryTypes || DEFAULT_ENTRY_TYPES;
-  const entryTriggers = j.entryTriggers || DEFAULT_ENTRY_TRIGGERS;
+  const entryTypes = j.entryTypes || [];
+  const entryTriggers = j.entryTriggers || [];
+  const missedReasons = j.missedReasons || DEFAULT_MISSED_REASONS;
 
   function reasonRows(reasons, cls) {
     return reasons.map((r, i) => `
@@ -1062,6 +1087,14 @@ function renderSettings() {
       </div>
 
       <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Missed Trade Reasons</div>
+        <div id="missedReasonList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+          ${reasonRows(missedReasons, 'missed-reason-input')}
+        </div>
+        <button type="button" class="btn-secondary btn-sm" onclick="addReasonField('missedReasonList','missed-reason-input')">+ Add Missed Reason</button>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
         <div style="font-size:13px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Backup & Transfer</div>
         <div style="font-size:13px;color:#64748b;margin-bottom:14px">Export all your journals and trades to a file. Use this to back up your data or transfer it to another device/browser.</div>
         <div style="display:flex;gap:12px;flex-wrap:wrap">
@@ -1126,15 +1159,26 @@ function removePendingImage(type, index) {
 
 function updateOutcomeReasons(outcome, selectedReasons = []) {
   const j = currentJournal();
-  const reasons = outcome === 'Win' ? (j.winReasons || WIN_REASONS) : outcome === 'Loss' ? (j.lossReasons || LOSS_REASONS) : [];
+  const reasons = outcome === 'Win' ? (j.winReasons || []) : outcome === 'Loss' ? (j.lossReasons || []) : outcome === 'Missed' ? (j.missedReasons || DEFAULT_MISSED_REASONS) : [];
   const container = document.getElementById('outcomeReasons');
+  const label = document.getElementById('outcomeReasonsLabel');
   if (!container) return;
+  if (label) label.innerHTML = outcome === 'Missed'
+    ? 'Missed Reason <span style="color:#64748b;text-transform:none;font-weight:400">(select all that apply)</span>'
+    : 'Outcome Reason <span style="color:#64748b;text-transform:none;font-weight:400">(select all that apply)</span>';
   if (!reasons.length) { container.innerHTML = '<div style="color:#64748b;font-size:13px">Select an outcome first</div>'; return; }
   container.innerHTML = reasons.map(r => `
     <div class="checkbox-pill${selectedReasons.includes(r) ? ' checked' : ''}" onclick="togglePill(this)" data-value="${escHtml(r)}">
       ${escHtml(r)}
     </div>`).join('');
   saveDraft();
+}
+
+function updateMissedFields(outcome) {
+  const el = document.getElementById('missedFields');
+  if (el) el.style.display = outcome === 'Missed' ? 'block' : 'none';
+  const regularDollar = document.querySelector('[name=dollarAmount]');
+  if (regularDollar) regularDollar.closest('div').style.display = outcome === 'Missed' ? 'none' : 'block';
 }
 
 function togglePill(el) {
@@ -1186,10 +1230,11 @@ async function handleSaveTrade(event) {
 
   const uniqueReasons = Array.from(form.querySelectorAll('.checkbox-pill.checked')).map(el => el.getAttribute('data-value'));
 
-  const dollarAmount = parseFloat(data.get('dollarAmount')) || 0;
+  const outcome = data.get('outcome');
+  const isMissed = outcome === 'Missed';
+  const dollarAmount = parseFloat(isMissed ? data.get('dollarAmountMissed') : data.get('dollarAmount')) || 0;
   const fixedR = j.fixedR || 1;
   const realizedR = parseFloat(data.get('realizedR')) || (dollarAmount / fixedR);
-  const outcome = data.get('outcome');
 
   // Save images to IndexedDB
   const allExec = [];
@@ -1222,6 +1267,7 @@ async function handleSaveTrade(event) {
     confidence: parseInt(data.get('confidence')) || 5,
     entryType: data.get('entryType'),
     entryTriggers: Array.from(document.querySelectorAll('#entryTriggers .checkbox-pill.checked')).map(el => el.getAttribute('data-value')),
+    hypotheticalOutcome: data.get('hypotheticalOutcome') || null,
     direction: data.get('direction'),
     setup: data.get('setup'),
     outcome,
@@ -1243,14 +1289,14 @@ async function handleSaveTrade(event) {
     // Reverse old P&L, apply new
     const journalIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
     if (journalIdx >= 0 && oldTrade) {
-      state.journals[journalIdx].accountSize += (oldTrade.outcome === 'Win' ? -oldTrade.dollarAmount : oldTrade.dollarAmount);
-      state.journals[journalIdx].accountSize += (tradeData.outcome === 'Win' ? tradeData.dollarAmount : -tradeData.dollarAmount);
+      if (oldTrade.outcome !== 'Missed') state.journals[journalIdx].accountSize += (oldTrade.outcome === 'Win' ? -oldTrade.dollarAmount : oldTrade.dollarAmount);
+      if (tradeData.outcome !== 'Missed') state.journals[journalIdx].accountSize += (tradeData.outcome === 'Win' ? tradeData.dollarAmount : -tradeData.dollarAmount);
     }
     const idx = state.trades.findIndex(t => t.id === tradeData.id);
     state.trades[idx] = tradeData;
   } else {
     const journalIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
-    if (journalIdx >= 0) {
+    if (journalIdx >= 0 && !isMissed) {
       state.journals[journalIdx].accountSize += (outcome === 'Win' ? dollarAmount : -dollarAmount);
     }
     state.trades.push(tradeData);
@@ -1294,6 +1340,7 @@ function handleSaveSettings(event) {
   const lossReasons = Array.from(form.querySelectorAll('.loss-reason-input')).map(i => i.value.trim()).filter(Boolean);
   const entryTypes = Array.from(form.querySelectorAll('.entry-type-input')).map(i => i.value.trim()).filter(Boolean);
   const entryTriggers = Array.from(form.querySelectorAll('.entry-trigger-input')).map(i => i.value.trim()).filter(Boolean);
+  const missedReasons = Array.from(form.querySelectorAll('.missed-reason-input')).map(i => i.value.trim()).filter(Boolean);
   state.journals[journalIdx].name = form.querySelector('[name=journalName]').value.trim();
   state.journals[journalIdx].accountSize = parseFloat(form.querySelector('[name=accountSize]').value) || 0;
   state.journals[journalIdx].fixedR = parseFloat(form.querySelector('[name=fixedR]').value) || 0;
@@ -1302,6 +1349,7 @@ function handleSaveSettings(event) {
   state.journals[journalIdx].lossReasons = lossReasons;
   state.journals[journalIdx].entryTypes = entryTypes;
   state.journals[journalIdx].entryTriggers = entryTriggers;
+  state.journals[journalIdx].missedReasons = missedReasons;
   // Sync setup details keys with updated setups list
   const details = state.journals[journalIdx].setupDetails || {};
   setups.forEach(s => { if (!details[s]) details[s] = { description: '', imageIds: [] }; });
