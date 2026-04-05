@@ -1,0 +1,1825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trade Journal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0f1e; color: #e2e8f0; margin: 0; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0a0f1e; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    .sidebar { width: 220px; min-height: 100vh; background: #0d1424; border-right: 1px solid #1e293b; position: fixed; top: 0; left: 0; z-index: 10; display: flex; flex-direction: column; }
+    .main { margin-left: 220px; min-height: 100vh; }
+    .nav-link { display: flex; align-items: center; gap: 10px; padding: 10px 16px; cursor: pointer; border-radius: 6px; margin: 2px 8px; color: #94a3b8; transition: all 0.15s; font-size: 14px; border: none; background: none; width: calc(100% - 16px); text-align: left; }
+    .nav-link:hover { background: #1e293b; color: #e2e8f0; }
+    .nav-link.active { background: rgba(16,185,129,0.15); color: #10b981; border-left: 3px solid #10b981; margin-left: 5px; }
+    .card { background: #0d1424; border: 1px solid #1e293b; border-radius: 10px; padding: 20px; }
+    .stat-card { background: #0d1424; border: 1px solid #1e293b; border-radius: 10px; padding: 16px 20px; }
+    .form-input { width: 100%; background: #0a0f1e; border: 1px solid #334155; border-radius: 6px; padding: 9px 12px; color: #e2e8f0; font-size: 14px; outline: none; transition: border 0.15s; }
+    .form-input:focus { border-color: #3b82f6; }
+    .form-select { width: 100%; background: #0a0f1e; border: 1px solid #334155; border-radius: 6px; padding: 9px 12px; color: #e2e8f0; font-size: 14px; outline: none; cursor: pointer; }
+    .form-select:focus { border-color: #3b82f6; }
+    .btn-primary { background: #10b981; color: #fff; border: none; border-radius: 6px; padding: 9px 18px; cursor: pointer; font-size: 14px; font-weight: 600; transition: background 0.15s; }
+    .btn-primary:hover { background: #059669; }
+    .btn-secondary { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; border-radius: 6px; padding: 9px 18px; cursor: pointer; font-size: 14px; transition: background 0.15s; }
+    .btn-secondary:hover { background: #334155; }
+    .btn-danger { background: #ef4444; color: #fff; border: none; border-radius: 6px; padding: 7px 14px; cursor: pointer; font-size: 13px; transition: background 0.15s; }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-sm { padding: 5px 12px; font-size: 13px; }
+    .label { display: block; font-size: 12px; font-weight: 600; color: #94a3b8; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .win-badge { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
+    .loss-badge { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: flex; align-items: center; justify-content: center; }
+    .modal { background: #0d1424; border: 1px solid #1e293b; border-radius: 12px; padding: 28px; width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
+    .checkbox-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+    .checkbox-pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid #334155; border-radius: 20px; cursor: pointer; font-size: 13px; transition: all 0.15s; }
+    .checkbox-pill:hover { border-color: #3b82f6; }
+    .checkbox-pill input { display: none; }
+    .checkbox-pill.checked { background: rgba(59,130,246,0.15); border-color: #3b82f6; color: #60a5fa; }
+    .image-upload-area { border: 2px dashed #334155; border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; transition: border 0.15s; }
+    .image-upload-area:hover { border-color: #3b82f6; }
+    .image-thumb { position: relative; display: inline-block; }
+    .image-thumb img { width: 120px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #334155; }
+    .image-thumb .remove-img { position: absolute; top: -6px; right: -6px; background: #ef4444; border: none; border-radius: 50%; width: 18px; height: 18px; cursor: pointer; color: white; font-size: 11px; display: flex; align-items: center; justify-content: center; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 10px 14px; font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #1e293b; }
+    td { padding: 12px 14px; font-size: 14px; border-bottom: 1px solid #0f172a; }
+    tr:hover td { background: rgba(30,41,59,0.4); cursor: pointer; }
+    .tag { display: inline-block; background: #1e293b; border-radius: 4px; padding: 2px 8px; font-size: 12px; color: #94a3b8; margin: 1px; }
+    .equity-positive { color: #10b981; }
+    .equity-negative { color: #ef4444; }
+    .divider { height: 1px; background: #1e293b; margin: 20px 0; }
+    .tab-btn { padding: 8px 16px; border: none; background: none; cursor: pointer; font-size: 14px; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.15s; }
+    .tab-btn.active { color: #10b981; border-bottom-color: #10b981; }
+    .img-preview-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 200; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .img-preview-overlay img { max-width: 90vw; max-height: 90vh; border-radius: 8px; }
+    .journal-card { background: #0a0f1e; border: 1px solid #1e293b; border-radius: 10px; padding: 16px 20px; cursor: pointer; transition: border 0.15s; }
+    .journal-card:hover { border-color: #10b981; }
+    .progress-bar-bg { background: #1e293b; border-radius: 999px; height: 6px; }
+    .progress-bar-fill { height: 6px; border-radius: 999px; transition: width 0.3s; }
+    input[type=range] { -webkit-appearance: none; width: 100%; height: 6px; border-radius: 999px; background: #1e293b; outline: none; cursor: pointer; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #3b82f6; cursor: pointer; border: 2px solid #0a0f1e; }
+    input[type=range]::-webkit-slider-thumb:hover { background: #60a5fa; }
+    .confidence-track { position: relative; padding-top: 8px; }
+    .confidence-labels { display: flex; justify-content: space-between; font-size: 11px; color: #64748b; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<script>
+// ============================================================
+//  STORAGE LAYER
+// ============================================================
+const DB = {
+  get(key, def = null) {
+    try { const v = localStorage.getItem('tj_' + key); return v ? JSON.parse(v) : def; } catch { return def; }
+  },
+  set(key, val) { localStorage.setItem('tj_' + key, JSON.stringify(val)); },
+  getJournals() { return this.get('journals', []); },
+  saveJournals(j) { this.set('journals', j); },
+  getTrades() { return this.get('trades', []); },
+  saveTrades(t) { this.set('trades', t); },
+  getCurrentJournalId() { return this.get('currentJournalId', null); },
+  setCurrentJournalId(id) { this.set('currentJournalId', id); },
+};
+
+// IndexedDB for images
+const ImageDB = {
+  db: null,
+  init() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('TradeJournalImages', 1);
+      req.onupgradeneeded = e => {
+        e.target.result.createObjectStore('images', { keyPath: 'id' });
+      };
+      req.onsuccess = e => { this.db = e.target.result; resolve(); };
+      req.onerror = () => reject();
+    });
+  },
+  save(id, dataUrl) {
+    return new Promise((resolve) => {
+      const tx = this.db.transaction('images', 'readwrite');
+      tx.objectStore('images').put({ id, dataUrl });
+      tx.oncomplete = resolve;
+    });
+  },
+  get(id) {
+    return new Promise((resolve) => {
+      const tx = this.db.transaction('images', 'readonly');
+      const req = tx.objectStore('images').get(id);
+      req.onsuccess = () => resolve(req.result ? req.result.dataUrl : null);
+      req.onerror = () => resolve(null);
+    });
+  },
+  delete(id) {
+    return new Promise((resolve) => {
+      const tx = this.db.transaction('images', 'readwrite');
+      tx.objectStore('images').delete(id);
+      tx.oncomplete = resolve;
+    });
+  },
+};
+
+// ============================================================
+//  STATE
+// ============================================================
+const state = {
+  journals: [],
+  trades: [],
+  currentJournalId: null,
+  view: 'dashboard',
+  editTradeId: null,
+  historyFilter: { setup: '', outcome: '', search: '', dateFrom: '', dateTo: '', month: '', year: '', dayOfWeek: '' },
+  statsTab: 'setup',
+  draftTrade: null,
+  selectedSetup: null,
+};
+
+const WIN_REASONS = ['HTF pd array', 'Valid setup', 'Patience', 'W/ daily bias', 'Clear imbalance'];
+const LOSS_REASONS = ['Impulsive', 'Too zoomed in', 'Forced', 'No setup', 'No clear imbalance', 'Bad read', 'Bad execution', 'Against daily bias', 'Just failed'];
+const DEFAULT_SETUPS = ['OTE', 'OTE RP', 'OFR', 'Failed Long', 'Failed Short', 'IFVG'];
+const DEFAULT_ENTRY_TYPES = ['Aggressive MSS', 'Retracement MSS', 'Aggressive iFVG', 'Retracement iFVG'];
+const DEFAULT_ENTRY_TRIGGERS = ['Protected swing break', 'iFVG', 'Anticipation'];
+
+// ============================================================
+//  HELPERS
+// ============================================================
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+function formatTime(t) {
+  if (!t) return '—';
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'pm' : 'am';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2,'0')}${ampm}`;
+}
+function currentJournal() { return state.journals.find(j => j.id === state.currentJournalId); }
+function journalTrades(jid = state.currentJournalId) { return state.trades.filter(t => t.journalId === jid); }
+function fmt$(n) { if (n == null || isNaN(n)) return '-'; const sign = n >= 0 ? '+' : ''; return sign + '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtR(n) { if (n == null || isNaN(n)) return '-'; return (n >= 0 ? '+' : '') + n.toFixed(2) + 'R'; }
+function fmtPct(n) { return n.toFixed(1) + '%'; }
+function escHtml(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function loadState() {
+  state.journals = DB.getJournals();
+  state.trades = DB.getTrades();
+  state.currentJournalId = DB.getCurrentJournalId();
+}
+function persistTrades() { DB.saveTrades(state.trades); }
+function persistJournals() { DB.saveJournals(state.journals); }
+
+// ============================================================
+//  NAVIGATION
+// ============================================================
+function navigate(view, opts = {}) {
+  state.view = view;
+  if (opts.tradeId !== undefined) state.editTradeId = opts.tradeId;
+  render();
+}
+
+// ============================================================
+//  STATS CALCULATIONS
+// ============================================================
+function calcStats(trades) {
+  if (!trades.length) return null;
+  const wins = trades.filter(t => t.outcome === 'Win');
+  const losses = trades.filter(t => t.outcome === 'Loss');
+  const totalPnl = trades.reduce((s, t) => s + (t.outcome === 'Win' ? t.dollarAmount : -t.dollarAmount), 0);
+  const winRate = trades.length ? (wins.length / trades.length) * 100 : 0;
+  const avgWin = wins.length ? wins.reduce((s, t) => s + t.dollarAmount, 0) / wins.length : 0;
+  const avgLoss = losses.length ? losses.reduce((s, t) => s + t.dollarAmount, 0) / losses.length : 0;
+  const avgR = trades.length ? trades.reduce((s, t) => s + (t.outcome === 'Win' ? t.realizedR : -t.realizedR), 0) / trades.length : 0;
+  const grossWin = wins.reduce((s, t) => s + t.dollarAmount, 0);
+  const grossLoss = losses.reduce((s, t) => s + t.dollarAmount, 0);
+  const profitFactor = grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0;
+  return { wins: wins.length, losses: losses.length, total: trades.length, totalPnl, winRate, avgWin, avgLoss, avgR, profitFactor };
+}
+
+function calcSetupStats(trades) {
+  const map = {};
+  trades.forEach(t => {
+    if (!map[t.setup]) map[t.setup] = { wins: 0, losses: 0, totalPnl: 0, count: 0 };
+    const s = map[t.setup];
+    s.count++;
+    if (t.outcome === 'Win') { s.wins++; s.totalPnl += t.dollarAmount; }
+    else { s.losses++; s.totalPnl -= t.dollarAmount; }
+  });
+  return Object.entries(map).map(([setup, s]) => ({
+    setup, ...s,
+    winRate: (s.wins / s.count) * 100,
+    avgPnl: s.totalPnl / s.count,
+  })).sort((a, b) => b.count - a.count);
+}
+
+function calcReasonStats(trades, outcome) {
+  const filtered = trades.filter(t => t.outcome === outcome);
+  const counts = {};
+  filtered.forEach(t => {
+    (t.outcomeReasons || []).forEach(r => { counts[r] = (counts[r] || 0) + 1; });
+  });
+  const total = filtered.length;
+  return Object.entries(counts)
+    .map(([reason, count]) => ({ reason, count, pct: total ? (count / total) * 100 : 0 }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function buildEquityCurve(trades, initialSize) {
+  const sorted = [...trades].sort((a, b) => new Date(a.date) - new Date(b.date));
+  let bal = initialSize;
+  const points = [{ label: 'Start', value: bal }];
+  sorted.forEach(t => {
+    bal += t.outcome === 'Win' ? t.dollarAmount : -t.dollarAmount;
+    points.push({ label: t.date, value: bal });
+  });
+  return points;
+}
+
+// ============================================================
+//  RENDER HELPERS
+// ============================================================
+let chartInstance = null;
+
+function renderApp() {
+  const j = currentJournal();
+  const trades = journalTrades();
+  const stats = calcStats(trades);
+  const viewMap = {
+    dashboard: renderDashboard,
+    newTrade: renderNewTrade,
+    history: renderHistory,
+    statistics: renderStatistics,
+    setups: renderSetups,
+    settings: renderSettings,
+    tradeDetail: renderTradeDetail,
+  };
+  const sidebarHtml = `
+    <div class="sidebar">
+      <div style="padding:20px 16px 10px">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Journal</div>
+        <div style="font-size:15px;font-weight:700;color:#e2e8f0;cursor:pointer;display:flex;align-items:center;gap:6px" onclick="showJournalSelector()">
+          ${escHtml(j.name)}
+          <svg width="12" height="12" fill="none" stroke="#64748b" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div style="margin-top:6px;font-size:12px;color:#64748b">
+          Balance: <span style="color:${(j.accountSize || 0) >= 0 ? '#10b981' : '#ef4444'};font-weight:600">$${(j.accountSize || 0).toLocaleString('en-US', {minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+        </div>
+      </div>
+      <div class="divider" style="margin:10px 0"></div>
+      <nav style="flex:1">
+        ${navItem('dashboard','Dashboard','M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6')}
+        ${navItem('newTrade','New Trade','M12 4v16m8-8H4')}
+        ${navItem('history','Trade History','M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2')}
+        ${navItem('statistics','Statistics','M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z')}
+        ${navItem('setups','Setups','M19 11H7m12 0a2 2 0 110 4m0-4a2 2 0 100-4m-12 4a2 2 0 110 4m0-4a2 2 0 100-4m0 4h.01M7 15a2 2 0 110-4m0 0h12')}
+        ${navItem('settings','Settings','M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z')}
+      </nav>
+      <div style="padding:16px;font-size:11px;color:#334155">Trade Journal v1.0</div>
+    </div>`;
+  const content = (viewMap[state.view] || renderDashboard)();
+  document.getElementById('app').innerHTML = sidebarHtml + `<div class="main">${content}</div>`;
+  attachListeners();
+  if (state.view === 'dashboard') renderEquityChart(trades, j);
+  if (state.view === 'statistics') renderStatCharts(trades);
+}
+
+function navItem(view, label, iconPath) {
+  const active = state.view === view ? 'active' : '';
+  return `<button class="nav-link ${active}" onclick="navigate('${view}')">
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="${escHtml(iconPath)}"/></svg>
+    ${label}
+  </button>`;
+}
+
+// ============================================================
+//  DASHBOARD
+// ============================================================
+function renderDashboard() {
+  const trades = journalTrades();
+  const stats = calcStats(trades);
+  const j = currentJournal();
+  const initialSize = j.initialAccountSize || j.accountSize || 0;
+  const change = j.accountSize - initialSize;
+  const changePct = initialSize ? (change / initialSize) * 100 : 0;
+
+  const recentTrades = [...trades].sort((a,b) => new Date(b.date)-new Date(a.date)).slice(0,8);
+
+  return `
+  <div style="padding:28px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <div>
+        <h1 style="font-size:22px;font-weight:700;margin:0">Dashboard</h1>
+        <div style="color:#64748b;font-size:14px;margin-top:2px">${trades.length} trades logged</div>
+      </div>
+      <button class="btn-primary" onclick="navigate('newTrade')">+ New Trade</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px">
+      ${statCard('Account Balance', '$' + (j.accountSize||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}), null, '#3b82f6')}
+      ${statCard('Total P&L', fmt$(change), changePct, change >= 0 ? '#10b981' : '#ef4444')}
+      ${statCard('Win Rate', stats ? fmtPct(stats.winRate) : '—', null, '#10b981')}
+      ${statCard('Profit Factor', stats ? (isFinite(stats.profitFactor) ? stats.profitFactor.toFixed(2) : '∞') : '—', null, '#f59e0b')}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">
+      ${statCard('Total Trades', stats ? stats.total : 0, null, '#8b5cf6')}
+      ${statCard('Avg Win', stats && stats.wins > 0 ? fmt$(stats.avgWin) : '—', null, '#10b981')}
+      ${statCard('Avg Loss', stats && stats.losses > 0 ? '-$'+Math.abs(stats.avgLoss).toFixed(2) : '—', null, '#ef4444')}
+      ${statCard('Avg R', stats ? fmtR(stats.avgR) : '—', null, '#f59e0b')}
+    </div>
+
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-bottom:24px">
+      <div class="card">
+        <div style="font-size:14px;font-weight:600;margin-bottom:14px;color:#94a3b8">EQUITY CURVE</div>
+        <canvas id="equityChart" height="100"></canvas>
+      </div>
+      <div class="card">
+        <div style="font-size:14px;font-weight:600;margin-bottom:14px;color:#94a3b8">WIN / LOSS</div>
+        <canvas id="winLossChart" height="100"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-size:14px;font-weight:600;margin-bottom:14px;color:#94a3b8">RECENT TRADES</div>
+      ${recentTrades.length ? `
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Setup</th><th>Direction</th><th>Outcome</th><th>$ Amount</th><th>Realized R</th>
+        </tr></thead>
+        <tbody>
+          ${recentTrades.map(t => `
+          <tr onclick="navigate('tradeDetail',{tradeId:'${t.id}'})">
+            <td>${t.date}</td>
+            <td><span class="tag">${escHtml(t.setup)}</span></td>
+            <td><span style="color:${t.direction==='Long'?'#10b981':'#ef4444'}">${t.direction}</span></td>
+            <td><span class="${t.outcome==='Win'?'win-badge':'loss-badge'}">${t.outcome}</span></td>
+            <td style="color:${t.outcome==='Win'?'#10b981':'#ef4444'}">${t.outcome==='Win'?'+':'-'}$${Math.abs(t.dollarAmount).toFixed(2)}</td>
+            <td style="color:${t.outcome==='Win'?'#10b981':'#ef4444'}">${t.outcome==='Win'?'+':'-'}${(t.realizedR||0).toFixed(2)}R</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>` : '<div style="text-align:center;color:#64748b;padding:30px">No trades yet. <button class="btn-primary btn-sm" onclick="navigate(\'newTrade\')" style="margin-left:8px">Log your first trade</button></div>'}
+    </div>
+  </div>`;
+}
+
+function statCard(label, value, subValue, color) {
+  return `<div class="stat-card">
+    <div style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">${label}</div>
+    <div style="font-size:22px;font-weight:700;color:${color}">${value}</div>
+    ${subValue != null ? `<div style="font-size:12px;color:${parseFloat(subValue)>=0?'#10b981':'#ef4444'};margin-top:2px">${parseFloat(subValue)>=0?'+':''}${parseFloat(subValue).toFixed(1)}%</div>` : ''}
+  </div>`;
+}
+
+function renderEquityChart(trades, j) {
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  const cvs = document.getElementById('equityChart');
+  if (!cvs) return;
+  const points = buildEquityCurve(trades, j.initialAccountSize || j.accountSize || 0);
+  chartInstance = new Chart(cvs, {
+    type: 'line',
+    data: {
+      labels: points.map(p => p.label),
+      datasets: [{
+        data: points.map(p => p.value),
+        borderColor: '#10b981',
+        backgroundColor: 'rgba(16,185,129,0.08)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: points.length < 30 ? 3 : 0,
+        pointBackgroundColor: '#10b981',
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { display: false },
+        y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b', callback: v => '$'+v.toLocaleString() } }
+      }
+    }
+  });
+
+  const cvs2 = document.getElementById('winLossChart');
+  if (cvs2) {
+    const wins = trades.filter(t => t.outcome === 'Win').length;
+    const losses = trades.filter(t => t.outcome === 'Loss').length;
+    new Chart(cvs2, {
+      type: 'doughnut',
+      data: {
+        labels: ['Wins', 'Losses'],
+        datasets: [{ data: [wins, losses], backgroundColor: ['#10b981','#ef4444'], borderWidth: 0 }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: true, position: 'bottom', labels: { color: '#94a3b8', padding: 10 } } },
+        cutout: '65%'
+      }
+    });
+  }
+}
+
+// ============================================================
+//  NEW TRADE / EDIT TRADE
+// ============================================================
+function renderNewTrade() {
+  const j = currentJournal();
+  const isEdit = !!state.editTradeId;
+  const t = isEdit ? state.trades.find(x => x.id === state.editTradeId) : null;
+  const d = !isEdit ? (state.draftTrade || {}) : {};
+  const v = (field, def = '') => isEdit ? (t?.[field] ?? def) : (d[field] ?? def);
+  const setups = j.setups || DEFAULT_SETUPS;
+
+  return `
+  <div style="padding:28px;max-width:800px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px">
+      ${isEdit ? '<button class="btn-secondary btn-sm" onclick="navigate(\'tradeDetail\',{tradeId:\''+state.editTradeId+'\'})">← Back</button>' : ''}
+      <h1 style="font-size:22px;font-weight:700;margin:0">${isEdit ? 'Edit Trade' : 'New Trade'}</h1>
+    </div>
+    <form id="tradeForm" onsubmit="handleSaveTrade(event)">
+      <input type="hidden" name="tradeId" value="${isEdit ? state.editTradeId : ''}">
+
+      <!-- TRADE ANALYSIS -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Trade Analysis</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div>
+            <label class="label">Date</label>
+            <input type="date" name="date" class="form-input" value="${v('date', new Date().toISOString().slice(0,10))}" oninput="saveDraft()" required>
+          </div>
+          <div>
+            <label class="label">Time</label>
+            <input type="time" name="tradeTime" class="form-input" value="${v('tradeTime')}" oninput="saveDraft()">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div>
+            <label class="label">Ticker / Symbol</label>
+            <input type="text" name="ticker" class="form-input" placeholder="e.g. NQ, ES, AAPL" value="${escHtml(v('ticker'))}" oninput="saveDraft()">
+          </div>
+          <div>
+            <label class="label">Setup Confidence <span id="confLabel" style="color:#3b82f6;font-weight:700">${v('confidence','5')}/10</span></label>
+            <div class="confidence-track">
+              <input type="range" name="confidence" min="1" max="10" value="${v('confidence','5')}" oninput="document.getElementById('confLabel').textContent=this.value+'/10';saveDraft()">
+              <div class="confidence-labels"><span>1</span><span>5</span><span>10</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div>
+            <label class="label">Outcome</label>
+            <select name="outcome" class="form-select" id="outcomeSelect" onchange="updateOutcomeReasons(this.value,[]); saveDraft()" required>
+              <option value="">Select...</option>
+              <option value="Win" ${v('outcome')==='Win'?'selected':''}>Win</option>
+              <option value="Loss" ${v('outcome')==='Loss'?'selected':''}>Loss</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Direction</label>
+            <select name="direction" class="form-select" onchange="saveDraft()" required>
+              <option value="">Select...</option>
+              <option value="Long" ${v('direction')==='Long'?'selected':''}>Long</option>
+              <option value="Short" ${v('direction')==='Short'?'selected':''}>Short</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-bottom:14px">
+          <label class="label">Outcome Reason <span style="color:#64748b;text-transform:none;font-weight:400">(select all that apply)</span></label>
+          <div id="outcomeReasons" class="checkbox-group">
+            <div style="color:#64748b;font-size:13px">Select an outcome first</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div>
+            <label class="label">Setup</label>
+            <select name="setup" class="form-select" required>
+              <option value="">Select...</option>
+              ${setups.map(s => `<option value="${escHtml(s)}" ${v('setup')===s?'selected':''}>${escHtml(s)}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="label">$ Amount</label>
+            <input type="number" name="dollarAmount" class="form-input" placeholder="e.g. 500" step="0.01" min="0" value="${v('dollarAmount')}" oninput="calcRealizedR();saveDraft()" required>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <div>
+            <label class="label">Entry Type</label>
+            <select name="entryType" class="form-select" onchange="saveDraft()">
+              <option value="">Select...</option>
+              ${(currentJournal().entryTypes || DEFAULT_ENTRY_TYPES).map(e => `<option value="${escHtml(e)}" ${v('entryType')===e?'selected':''}>${escHtml(e)}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="label">Intended RR</label>
+            <input type="number" name="rr" class="form-input" placeholder="e.g. 3" step="0.01" min="0" value="${v('rr')}" oninput="saveDraft()">
+          </div>
+        </div>
+        <div style="margin-bottom:14px">
+          <label class="label">Entry Trigger <span style="color:#64748b;text-transform:none;font-weight:400">(select all that apply)</span></label>
+          <div id="entryTriggers" class="checkbox-group">
+            ${(currentJournal().entryTriggers || DEFAULT_ENTRY_TRIGGERS).map(tr => `
+              <div class="checkbox-pill${(v('entryTriggers',[])).includes(tr)?' checked':''}" onclick="togglePill(this)" data-value="${escHtml(tr)}" data-group="trigger">
+                ${escHtml(tr)}
+              </div>`).join('')}
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <label class="label">Realized R <span style="color:#64748b;text-transform:none;font-weight:400">(auto)</span></label>
+            <div class="form-input" id="realizedRDisplay" style="color:#f59e0b;font-weight:600;background:#0a0f1e">
+              ${t && t.realizedR ? t.realizedR.toFixed(2) + 'R' : d.realizedR ? parseFloat(d.realizedR).toFixed(2) + 'R' : '—'}
+            </div>
+            <input type="hidden" name="realizedR" id="realizedRInput" value="${v('realizedR')}">
+          </div>
+          <div></div>
+        </div>
+      </div>
+
+      <!-- CONTEXT -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Context</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+          <div>
+            <label class="label">Daily Bias</label>
+            <select name="dailyBias" class="form-select" onchange="saveDraft()">
+              <option value="">Select...</option>
+              <option value="Bullish" ${v('dailyBias')==='Bullish'?'selected':''}>Bullish</option>
+              <option value="Bearish" ${v('dailyBias')==='Bearish'?'selected':''}>Bearish</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">HTF PD Array</label>
+            <select name="htfPdArray" class="form-select" onchange="saveDraft()">
+              <option value="">Select...</option>
+              <option value="Yes" ${v('htfPdArray')==='Yes'?'selected':''}>Yes</option>
+              <option value="No" ${v('htfPdArray')==='No'?'selected':''}>No</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Market Environment</label>
+            <select name="marketEnvironment" class="form-select" onchange="saveDraft()">
+              <option value="">Select...</option>
+              <option value="Trending" ${v('marketEnvironment')==='Trending'?'selected':''}>Trending</option>
+              <option value="Ranging" ${v('marketEnvironment')==='Ranging'?'selected':''}>Ranging</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- EXECUTIONS -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Executions</div>
+        <div id="executionImages" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px"></div>
+        <div class="image-upload-area" onclick="document.getElementById('execUpload').click()">
+          <svg width="24" height="24" fill="none" stroke="#64748b" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 6px"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          <div style="font-size:13px;color:#64748b">Click to upload execution images</div>
+        </div>
+        <input type="file" id="execUpload" accept="image/*" multiple style="display:none" onchange="handleImageUpload(this,'execution')">
+      </div>
+
+      <!-- HTF VIEW -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#06b6d4;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">HTF View</div>
+        <div id="htfImages" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px"></div>
+        <div class="image-upload-area" onclick="document.getElementById('htfUpload').click()">
+          <svg width="24" height="24" fill="none" stroke="#64748b" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 6px"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          <div style="font-size:13px;color:#64748b">Click to upload HTF view images</div>
+        </div>
+        <input type="file" id="htfUpload" accept="image/*" multiple style="display:none" onchange="handleImageUpload(this,'htf')">
+      </div>
+
+      <!-- EMOTIONS -->
+      <div class="card" style="margin-bottom:24px">
+        <div style="font-size:13px;font-weight:700;color:#ec4899;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Emotions & Notes</div>
+        <label class="label">How were you feeling? What was your mindset?</label>
+        <textarea name="emotions" class="form-input" rows="4" placeholder="Describe your emotional state, any hesitations, confidence level..." style="resize:vertical" oninput="saveDraft()">${escHtml(v('emotions'))}</textarea>
+      </div>
+
+      <div style="display:flex;gap:12px">
+        <button type="submit" class="btn-primary" style="padding:11px 28px;font-size:15px">${isEdit ? 'Update Trade' : 'Save Trade'}</button>
+        <button type="button" class="btn-secondary" onclick="navigate('${isEdit?'tradeDetail':'dashboard'}',${isEdit?'{tradeId:\''+state.editTradeId+'\'}':{}})">${isEdit ? 'Cancel' : 'Back'}</button>
+        ${isEdit ? `<button type="button" class="btn-danger" style="margin-left:auto" onclick="confirmDeleteTrade('${state.editTradeId}')">Delete Trade</button>` : ''}
+      </div>
+    </form>
+  </div>`;
+}
+
+// ============================================================
+//  TRADE HISTORY
+// ============================================================
+const DAYS_OF_WEEK = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function applyHistoryFilters(trades) {
+  const f = state.historyFilter;
+  if (f.setup) trades = trades.filter(t => t.setup === f.setup);
+  if (f.outcome) trades = trades.filter(t => t.outcome === f.outcome);
+  if (f.search) trades = trades.filter(t => (t.ticker||'').toLowerCase().includes(f.search.toLowerCase()));
+  if (f.dateFrom) trades = trades.filter(t => t.date >= f.dateFrom);
+  if (f.dateTo) trades = trades.filter(t => t.date <= f.dateTo);
+  if (f.month) trades = trades.filter(t => new Date(t.date + 'T00:00:00').getMonth() === parseInt(f.month));
+  if (f.year) trades = trades.filter(t => new Date(t.date + 'T00:00:00').getFullYear() === parseInt(f.year));
+  if (f.dayOfWeek !== '') trades = trades.filter(t => new Date(t.date + 'T00:00:00').getDay() === parseInt(f.dayOfWeek));
+  return trades;
+}
+
+function renderHistory() {
+  const j = currentJournal();
+  const setups = j.setups || DEFAULT_SETUPS;
+  const allTrades = journalTrades();
+  let trades = applyHistoryFilters([...allTrades]).sort((a,b) => {
+    const d = new Date(b.date) - new Date(a.date);
+    if (d !== 0) return d;
+    return (b.tradeTime || '').localeCompare(a.tradeTime || '');
+  });
+  const f = state.historyFilter;
+  const hasFilter = f.setup||f.outcome||f.search||f.dateFrom||f.dateTo||f.month!==''&&f.month!==undefined&&f.month||f.year||f.dayOfWeek!=='';
+  const totalPnl = trades.reduce((s,t) => s + (t.outcome==='Win'?t.dollarAmount:-t.dollarAmount), 0);
+  const allYears = [...new Set(allTrades.map(t => new Date(t.date+'T00:00:00').getFullYear()))].sort((a,b)=>b-a);
+
+  return `
+  <div style="padding:28px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <h1 style="font-size:22px;font-weight:700;margin:0">Trade History</h1>
+      <div style="display:flex;gap:10px">
+        <button class="btn-secondary" onclick="showExportModal()">Export</button>
+        <button class="btn-primary" onclick="navigate('newTrade')">+ New Trade</button>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
+        <div>
+          <label class="label">Search Ticker</label>
+          <input type="text" class="form-input" style="width:140px" placeholder="Search..." value="${escHtml(f.search)}" oninput="state.historyFilter.search=this.value;navigate('history')">
+        </div>
+        <div>
+          <label class="label">Setup</label>
+          <select class="form-select" style="width:130px" onchange="state.historyFilter.setup=this.value;navigate('history')">
+            <option value="">All Setups</option>
+            ${setups.map(s=>`<option value="${escHtml(s)}" ${f.setup===s?'selected':''}>${escHtml(s)}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="label">Outcome</label>
+          <select class="form-select" style="width:110px" onchange="state.historyFilter.outcome=this.value;navigate('history')">
+            <option value="">All</option>
+            <option value="Win" ${f.outcome==='Win'?'selected':''}>Win</option>
+            <option value="Loss" ${f.outcome==='Loss'?'selected':''}>Loss</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Day of Week</label>
+          <select class="form-select" style="width:130px" onchange="state.historyFilter.dayOfWeek=this.value;navigate('history')">
+            <option value="">Any Day</option>
+            ${DAYS_OF_WEEK.map((d,i)=>`<option value="${i}" ${f.dayOfWeek===String(i)?'selected':''}>${d}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+        <div>
+          <label class="label">Month</label>
+          <select class="form-select" style="width:130px" onchange="state.historyFilter.month=this.value;navigate('history')">
+            <option value="">Any Month</option>
+            ${MONTHS.map((m,i)=>`<option value="${i}" ${f.month===String(i)?'selected':''}>${m}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="label">Year</label>
+          <select class="form-select" style="width:100px" onchange="state.historyFilter.year=this.value;navigate('history')">
+            <option value="">Any Year</option>
+            ${allYears.map(y=>`<option value="${y}" ${f.year===String(y)?'selected':''}>${y}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="label">Date From</label>
+          <input type="date" class="form-input" style="width:150px" value="${f.dateFrom}" onchange="state.historyFilter.dateFrom=this.value;navigate('history')">
+        </div>
+        <div>
+          <label class="label">Date To</label>
+          <input type="date" class="form-input" style="width:150px" value="${f.dateTo}" onchange="state.historyFilter.dateTo=this.value;navigate('history')">
+        </div>
+        ${hasFilter ? `<button class="btn-secondary btn-sm" style="align-self:flex-end" onclick="state.historyFilter={setup:'',outcome:'',search:'',dateFrom:'',dateTo:'',month:'',year:'',dayOfWeek:''};navigate('history')">Clear All</button>` : ''}
+        <div style="margin-left:auto;text-align:right;align-self:flex-end">
+          <div style="font-size:12px;color:#64748b">${trades.length} trade${trades.length!==1?'s':''}</div>
+          <div style="font-size:16px;font-weight:700;color:${totalPnl>=0?'#10b981':'#ef4444'}">${fmt$(totalPnl)}</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      ${trades.length ? `
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Time</th><th>Ticker</th><th>Setup</th><th>Conf.</th><th>Direction</th><th>Outcome</th><th>$ Amount</th><th>Realized R</th><th>Int. RR</th>
+        </tr></thead>
+        <tbody>
+          ${trades.map(t=>`
+          <tr onclick="navigate('tradeDetail',{tradeId:'${t.id}'})">
+            <td>${t.date}</td>
+            <td style="color:#64748b">${t.tradeTime?formatTime(t.tradeTime):'—'}</td>
+            <td style="font-weight:600">${escHtml(t.ticker||'—')}</td>
+            <td><span class="tag">${escHtml(t.setup)}</span></td>
+            <td style="color:${(t.confidence||5)>=8?'#10b981':(t.confidence||5)>=5?'#f59e0b':'#ef4444'};font-weight:600">${t.confidence||'—'}/10</td>
+            <td><span style="color:${t.direction==='Long'?'#10b981':'#ef4444'};font-weight:600">${t.direction||'—'}</span></td>
+            <td><span class="${t.outcome==='Win'?'win-badge':'loss-badge'}">${t.outcome}</span></td>
+            <td style="color:${t.outcome==='Win'?'#10b981':'#ef4444'};font-weight:600">${t.outcome==='Win'?'+':'-'}$${Math.abs(t.dollarAmount||0).toFixed(2)}</td>
+            <td style="color:${t.outcome==='Win'?'#10b981':'#ef4444'}">${t.outcome==='Win'?'+':'-'}${(t.realizedR||0).toFixed(2)}R</td>
+            <td>${t.rr||'—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>` : '<div style="text-align:center;color:#64748b;padding:40px">No trades found</div>'}
+    </div>
+  </div>`;
+}
+
+// ============================================================
+//  TRADE DETAIL
+// ============================================================
+async function renderTradeDetailAsync(tradeId) {
+  const t = state.trades.find(x => x.id === tradeId);
+  if (!t) { navigate('history'); return; }
+
+  // Load images
+  const execImgs = await Promise.all((t.executions||[]).map(async img => {
+    const dataUrl = await ImageDB.get(img.id);
+    return { ...img, dataUrl };
+  }));
+  const htfImgs = await Promise.all((t.htfImages||[]).map(async img => {
+    const dataUrl = await ImageDB.get(img.id);
+    return { ...img, dataUrl };
+  }));
+
+  const confColor = (t.confidence||5) >= 8 ? '#10b981' : (t.confidence||5) >= 5 ? '#f59e0b' : '#ef4444';
+  const html = `
+  <div style="padding:28px;max-width:900px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap">
+      <button class="btn-secondary btn-sm" onclick="navigate('history')">← History</button>
+      <h1 style="font-size:22px;font-weight:700;margin:0;flex:1">${escHtml(t.ticker||'Trade')} — ${t.date}${t.tradeTime ? ' @ ' + formatTime(t.tradeTime) : ''}</h1>
+      <button class="btn-secondary btn-sm" onclick="navigate('newTrade',{tradeId:'${t.id}'})">Edit Trade</button>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:20px">
+      <div class="stat-card">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">Outcome</div>
+        <span class="${t.outcome==='Win'?'win-badge':'loss-badge'}" style="font-size:16px;padding:4px 12px">${t.outcome}</span>
+      </div>
+      <div class="stat-card">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">P&L</div>
+        <div style="font-size:20px;font-weight:700;color:${t.outcome==='Win'?'#10b981':'#ef4444'}">${t.outcome==='Win'?'+':'-'}$${Math.abs(t.dollarAmount||0).toFixed(2)}</div>
+      </div>
+      <div class="stat-card">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">Realized R</div>
+        <div style="font-size:20px;font-weight:700;color:${t.outcome==='Win'?'#10b981':'#ef4444'}">${t.outcome==='Win'?'+':'-'}${(t.realizedR||0).toFixed(2)}R</div>
+      </div>
+      <div class="stat-card">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">Intended RR</div>
+        <div style="font-size:20px;font-weight:700;color:#f59e0b">${t.rr||'—'}</div>
+      </div>
+      <div class="stat-card">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">Time</div>
+        <div style="font-size:18px;font-weight:700;color:#e2e8f0">${t.tradeTime ? formatTime(t.tradeTime) : '—'}</div>
+      </div>
+      <div class="stat-card">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">Confidence</div>
+        <div style="font-size:20px;font-weight:700;color:${confColor}">${t.confidence||'—'}<span style="font-size:13px;color:#64748b">/10</span></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Trade Details</div>
+        ${detailRow('Setup', `<span class="tag" style="font-size:14px">${escHtml(t.setup)}</span>`)}
+        ${detailRow('Direction', `<span style="color:${t.direction==='Long'?'#10b981':'#ef4444'};font-weight:600">${t.direction||'—'}</span>`)}
+        ${detailRow('Entry Type', escHtml(t.entryType||'—'))}
+        ${detailRow('Entry Triggers', (t.entryTriggers||[]).map(r=>`<span class="tag">${escHtml(r)}</span>`).join(' ')||'—')}
+        ${detailRow('Outcome Reasons', (t.outcomeReasons||[]).map(r=>`<span class="tag">${escHtml(r)}</span>`).join(' ')||'—')}
+      </div>
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Context</div>
+        ${detailRow('Daily Bias', `<span style="color:${t.dailyBias==='Bullish'?'#10b981':'#ef4444'};font-weight:600">${t.dailyBias||'—'}</span>`)}
+        ${detailRow('HTF PD Array', t.htfPdArray||'—')}
+        ${detailRow('Market Env', t.marketEnvironment||'—')}
+      </div>
+    </div>
+
+    ${execImgs.length ? `
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Executions</div>
+      <div style="display:flex;flex-wrap:wrap;gap:16px">
+        ${execImgs.map(img => img.dataUrl ? `
+        <div style="text-align:center">
+          <img src="${img.dataUrl}" style="max-width:280px;max-height:180px;border-radius:8px;border:1px solid #1e293b;cursor:pointer" onclick="previewImage('${img.dataUrl.substring(0,50)}')" data-fullsrc="${escHtml(img.dataUrl)}" class="preview-img">
+          <div style="font-size:12px;color:#64748b;margin-top:4px">${escHtml(img.title||'')}</div>
+        </div>` : '').join('')}
+      </div>
+    </div>` : ''}
+
+    ${htfImgs.length ? `
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;color:#06b6d4;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">HTF View</div>
+      <div style="display:flex;flex-wrap:wrap;gap:16px">
+        ${htfImgs.map(img => img.dataUrl ? `
+        <div style="text-align:center">
+          <img src="${img.dataUrl}" style="max-width:280px;max-height:180px;border-radius:8px;border:1px solid #1e293b;cursor:pointer" data-fullsrc="${escHtml(img.dataUrl)}" class="preview-img">
+          <div style="font-size:12px;color:#64748b;margin-top:4px">${escHtml(img.title||'')}</div>
+        </div>` : '').join('')}
+      </div>
+    </div>` : ''}
+
+    ${t.emotions ? `
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;color:#ec4899;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Emotions & Notes</div>
+      <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0;white-space:pre-wrap">${escHtml(t.emotions)}</p>
+    </div>` : ''}
+  </div>`;
+
+  document.getElementById('app').querySelector('.main').innerHTML = html;
+  document.querySelectorAll('.preview-img').forEach(img => {
+    img.addEventListener('click', () => previewImage(img.getAttribute('data-fullsrc')));
+  });
+}
+
+function renderTradeDetail() {
+  setTimeout(() => renderTradeDetailAsync(state.editTradeId), 0);
+  return `<div style="padding:40px;text-align:center;color:#64748b">Loading trade...</div>`;
+}
+
+function detailRow(label, value) {
+  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #0f172a">
+    <span style="font-size:13px;color:#64748b">${label}</span>
+    <span style="font-size:14px">${value}</span>
+  </div>`;
+}
+
+function previewImage(src) {
+  const overlay = document.createElement('div');
+  overlay.className = 'img-preview-overlay';
+  overlay.innerHTML = `<img src="${escHtml(src)}"><div style="position:absolute;top:20px;right:20px;color:#fff;font-size:24px;cursor:pointer">✕</div>`;
+  overlay.addEventListener('click', () => overlay.remove());
+  document.body.appendChild(overlay);
+}
+
+// ============================================================
+//  STATISTICS
+// ============================================================
+function renderStatistics() {
+  const trades = journalTrades();
+  const setupStats = calcSetupStats(trades);
+  const winReasons = calcReasonStats(trades, 'Win');
+  const lossReasons = calcReasonStats(trades, 'Loss');
+
+  return `
+  <div style="padding:28px">
+    <h1 style="font-size:22px;font-weight:700;margin:0 0 24px">Statistics</h1>
+    <div style="border-bottom:1px solid #1e293b;margin-bottom:20px">
+      <button class="tab-btn ${state.statsTab==='setup'?'active':''}" onclick="state.statsTab='setup';navigate('statistics')">By Setup</button>
+      <button class="tab-btn ${state.statsTab==='winReasons'?'active':''}" onclick="state.statsTab='winReasons';navigate('statistics')">Win Reasons</button>
+      <button class="tab-btn ${state.statsTab==='lossReasons'?'active':''}" onclick="state.statsTab='lossReasons';navigate('statistics')">Loss Reasons</button>
+    </div>
+
+    ${state.statsTab === 'setup' ? `
+    <div class="card">
+      <div style="font-size:14px;font-weight:600;margin-bottom:16px;color:#94a3b8">PERFORMANCE BY SETUP</div>
+      ${setupStats.length ? `
+      <table>
+        <thead><tr>
+          <th>Setup</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win Rate</th><th>Total P&L</th><th>Avg P&L</th>
+        </tr></thead>
+        <tbody>
+          ${setupStats.map(s => `
+          <tr>
+            <td><span class="tag" style="font-size:14px">${escHtml(s.setup)}</span></td>
+            <td>${s.count}</td>
+            <td style="color:#10b981">${s.wins}</td>
+            <td style="color:#ef4444">${s.losses}</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="progress-bar-bg" style="width:80px"><div class="progress-bar-fill" style="width:${s.winRate}%;background:${s.winRate>=50?'#10b981':'#ef4444'}"></div></div>
+                <span style="color:${s.winRate>=50?'#10b981':'#ef4444'};font-weight:600">${fmtPct(s.winRate)}</span>
+              </div>
+            </td>
+            <td style="color:${s.totalPnl>=0?'#10b981':'#ef4444'};font-weight:600">${fmt$(s.totalPnl)}</td>
+            <td style="color:${s.avgPnl>=0?'#10b981':'#ef4444'}">${fmt$(s.avgPnl)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      <div style="margin-top:20px"><canvas id="setupChart" height="60"></canvas></div>` : emptyStats()}
+    </div>` : ''}
+
+    ${state.statsTab === 'winReasons' ? `
+    <div class="card">
+      <div style="font-size:14px;font-weight:600;margin-bottom:16px;color:#94a3b8">WIN OUTCOME REASONS</div>
+      ${winReasons.length ? reasonTable(winReasons, '#10b981') : emptyStats('No wins logged yet')}
+    </div>` : ''}
+
+    ${state.statsTab === 'lossReasons' ? `
+    <div class="card">
+      <div style="font-size:14px;font-weight:600;margin-bottom:16px;color:#94a3b8">LOSS OUTCOME REASONS</div>
+      ${lossReasons.length ? reasonTable(lossReasons, '#ef4444') : emptyStats('No losses logged yet')}
+    </div>` : ''}
+  </div>`;
+}
+
+function reasonTable(reasons, color) {
+  return `<table>
+    <thead><tr><th>Reason</th><th>Count</th><th>% of Trades</th><th></th></tr></thead>
+    <tbody>
+      ${reasons.map(r=>`<tr>
+        <td>${escHtml(r.reason)}</td>
+        <td style="font-weight:600">${r.count}</td>
+        <td style="color:${color};font-weight:600">${fmtPct(r.pct)}</td>
+        <td style="width:160px">
+          <div class="progress-bar-bg"><div class="progress-bar-fill" style="width:${r.pct}%;background:${color}"></div></div>
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+function emptyStats(msg = 'No trades logged yet') {
+  return `<div style="text-align:center;color:#64748b;padding:40px">${msg}</div>`;
+}
+
+function renderStatCharts(trades) {
+  if (state.statsTab !== 'setup') return;
+  const setupStats = calcSetupStats(trades);
+  const cvs = document.getElementById('setupChart');
+  if (!cvs || !setupStats.length) return;
+  new Chart(cvs, {
+    type: 'bar',
+    data: {
+      labels: setupStats.map(s => s.setup),
+      datasets: [
+        { label: 'Wins', data: setupStats.map(s => s.wins), backgroundColor: '#10b981' },
+        { label: 'Losses', data: setupStats.map(s => s.losses), backgroundColor: '#ef4444' },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: true, labels: { color: '#94a3b8' } } },
+      scales: {
+        x: { grid: { color: '#1e293b' }, ticks: { color: '#64748b' } },
+        y: { grid: { color: '#1e293b' }, ticks: { color: '#64748b', stepSize: 1 } }
+      }
+    }
+  });
+}
+
+// ============================================================
+//  SETTINGS
+// ============================================================
+function renderSettings() {
+  const j = currentJournal();
+  const setups = j.setups || DEFAULT_SETUPS;
+  const winReasons = j.winReasons || WIN_REASONS;
+  const lossReasons = j.lossReasons || LOSS_REASONS;
+  const entryTypes = j.entryTypes || DEFAULT_ENTRY_TYPES;
+  const entryTriggers = j.entryTriggers || DEFAULT_ENTRY_TRIGGERS;
+
+  function reasonRows(reasons, cls) {
+    return reasons.map((r, i) => `
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="text" class="form-input ${cls}" value="${escHtml(r)}" style="flex:1">
+        <button type="button" class="btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>
+      </div>`).join('');
+  }
+
+  return `
+  <div style="padding:28px;max-width:600px">
+    <h1 style="font-size:22px;font-weight:700;margin:0 0 24px">Settings</h1>
+    <form onsubmit="handleSaveSettings(event)">
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Journal Settings</div>
+        <div style="margin-bottom:14px">
+          <label class="label">Journal Name</label>
+          <input type="text" name="journalName" class="form-input" value="${escHtml(j.name)}" required>
+        </div>
+        <div style="margin-bottom:14px">
+          <label class="label">Account Size ($)</label>
+          <input type="number" name="accountSize" class="form-input" value="${j.accountSize||0}" step="0.01" min="0" required>
+        </div>
+        <div style="margin-bottom:4px">
+          <label class="label">Fixed R — Risk Per Trade ($)</label>
+          <input type="number" name="fixedR" class="form-input" value="${j.fixedR||0}" step="0.01" min="0" required>
+        </div>
+        <div style="font-size:12px;color:#64748b;margin-top:6px">This is the dollar amount risked on every trade. Used to calculate Realized R.</div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Setups</div>
+        <div id="setupList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+          ${setups.map((s,i)=>`
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="text" class="form-input setup-input" value="${escHtml(s)}" data-index="${i}" style="flex:1">
+            <button type="button" class="btn-danger btn-sm" onclick="removeSetup(${i})">✕</button>
+          </div>`).join('')}
+        </div>
+        <button type="button" class="btn-secondary btn-sm" onclick="addSetupField()">+ Add Setup</button>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#06b6d4;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Entry Types</div>
+        <div id="entryTypeList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+          ${entryTypes.map(e => `
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="text" class="form-input entry-type-input" value="${escHtml(e)}" style="flex:1">
+            <button type="button" class="btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>
+          </div>`).join('')}
+        </div>
+        <button type="button" class="btn-secondary btn-sm" onclick="addReasonField('entryTypeList','entry-type-input')">+ Add Entry Type</button>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Entry Triggers</div>
+        <div id="entryTriggerList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+          ${entryTriggers.map(e => `
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="text" class="form-input entry-trigger-input" value="${escHtml(e)}" style="flex:1">
+            <button type="button" class="btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>
+          </div>`).join('')}
+        </div>
+        <button type="button" class="btn-secondary btn-sm" onclick="addReasonField('entryTriggerList','entry-trigger-input')">+ Add Entry Trigger</button>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Win Outcome Reasons</div>
+        <div id="winReasonList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+          ${reasonRows(winReasons, 'win-reason-input')}
+        </div>
+        <button type="button" class="btn-secondary btn-sm" onclick="addReasonField('winReasonList','win-reason-input')">+ Add Win Reason</button>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Loss Outcome Reasons</div>
+        <div id="lossReasonList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+          ${reasonRows(lossReasons, 'loss-reason-input')}
+        </div>
+        <button type="button" class="btn-secondary btn-sm" onclick="addReasonField('lossReasonList','loss-reason-input')">+ Add Loss Reason</button>
+      </div>
+
+      <div class="card" style="margin-bottom:24px">
+        <div style="font-size:13px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Danger Zone</div>
+        <div style="display:flex;gap:12px">
+          <button type="button" class="btn-secondary" onclick="showJournalSelector()">Switch Journal</button>
+          <button type="button" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:9px 18px;cursor:pointer;font-size:14px" onclick="confirmDeleteJournal()">Delete This Journal</button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-primary" style="padding:11px 28px;font-size:15px">Save Settings</button>
+    </form>
+  </div>`;
+}
+
+// ============================================================
+//  EVENT HANDLERS
+// ============================================================
+
+// ---- Image temp storage (for new trade form) ----
+const pendingImages = { execution: [], htf: [] };
+
+function handleImageUpload(input, type) {
+  const files = Array.from(input.files);
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const title = prompt(`Title for "${file.name}":`, file.name.replace(/\.[^.]+$/,'')) || file.name;
+      const id = uid();
+      pendingImages[type].push({ id, title, dataUrl: e.target.result });
+      renderImagePreviews(type);
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+}
+
+function renderImagePreviews(type) {
+  const container = document.getElementById(type === 'execution' ? 'executionImages' : 'htfImages');
+  if (!container) return;
+  container.innerHTML = pendingImages[type].map((img, i) => `
+    <div class="image-thumb">
+      <img src="${img.dataUrl}" alt="${escHtml(img.title)}">
+      <button class="remove-img" onclick="removePendingImage('${type}',${i})">✕</button>
+      <div style="font-size:11px;color:#64748b;text-align:center;margin-top:3px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(img.title)}</div>
+    </div>`).join('');
+}
+
+function removePendingImage(type, index) {
+  pendingImages[type].splice(index, 1);
+  renderImagePreviews(type);
+}
+
+function updateOutcomeReasons(outcome, selectedReasons = []) {
+  const j = currentJournal();
+  const reasons = outcome === 'Win' ? (j.winReasons || WIN_REASONS) : outcome === 'Loss' ? (j.lossReasons || LOSS_REASONS) : [];
+  const container = document.getElementById('outcomeReasons');
+  if (!container) return;
+  if (!reasons.length) { container.innerHTML = '<div style="color:#64748b;font-size:13px">Select an outcome first</div>'; return; }
+  container.innerHTML = reasons.map(r => `
+    <div class="checkbox-pill${selectedReasons.includes(r) ? ' checked' : ''}" onclick="togglePill(this)" data-value="${escHtml(r)}">
+      ${escHtml(r)}
+    </div>`).join('');
+  saveDraft();
+}
+
+function togglePill(el) {
+  el.classList.toggle('checked');
+  saveDraft();
+}
+
+function saveDraft() {
+  if (state.editTradeId) return;
+  const form = document.getElementById('tradeForm');
+  if (!form) return;
+  state.draftTrade = {
+    date: form.querySelector('[name=date]')?.value || '',
+    tradeTime: form.querySelector('[name=tradeTime]')?.value || '',
+    ticker: form.querySelector('[name=ticker]')?.value || '',
+    confidence: form.querySelector('[name=confidence]')?.value || '5',
+    entryType: form.querySelector('[name=entryType]')?.value || '',
+    entryTriggers: Array.from(document.querySelectorAll('#entryTriggers .checkbox-pill.checked')).map(el => el.getAttribute('data-value')),
+    outcome: form.querySelector('[name=outcome]')?.value || '',
+    direction: form.querySelector('[name=direction]')?.value || '',
+    setup: form.querySelector('[name=setup]')?.value || '',
+    dollarAmount: form.querySelector('[name=dollarAmount]')?.value || '',
+    rr: form.querySelector('[name=rr]')?.value || '',
+    dailyBias: form.querySelector('[name=dailyBias]')?.value || '',
+    htfPdArray: form.querySelector('[name=htfPdArray]')?.value || '',
+    marketEnvironment: form.querySelector('[name=marketEnvironment]')?.value || '',
+    emotions: form.querySelector('[name=emotions]')?.value || '',
+    outcomeReasons: Array.from(document.querySelectorAll('#outcomeReasons .checkbox-pill.checked')).map(el => el.getAttribute('data-value')),
+  };
+}
+
+function calcRealizedR() {
+  const j = currentJournal();
+  const fixedR = j.fixedR || 0;
+  const amount = parseFloat(document.querySelector('[name=dollarAmount]')?.value) || 0;
+  const realized = fixedR > 0 ? amount / fixedR : 0;
+  const display = document.getElementById('realizedRDisplay');
+  const input = document.getElementById('realizedRInput');
+  if (display) display.textContent = realized > 0 ? realized.toFixed(2) + 'R' : '—';
+  if (input) input.value = realized;
+}
+
+async function handleSaveTrade(event) {
+  event.preventDefault();
+  const form = event.target;
+  const data = new FormData(form);
+  const isEdit = !!data.get('tradeId');
+  const j = currentJournal();
+
+  const uniqueReasons = Array.from(form.querySelectorAll('.checkbox-pill.checked')).map(el => el.getAttribute('data-value'));
+
+  const dollarAmount = parseFloat(data.get('dollarAmount')) || 0;
+  const fixedR = j.fixedR || 1;
+  const realizedR = parseFloat(data.get('realizedR')) || (dollarAmount / fixedR);
+  const outcome = data.get('outcome');
+
+  // Save images to IndexedDB
+  const allExec = [];
+  const allHtf = [];
+
+  if (isEdit) {
+    // Keep existing images
+    const existing = state.trades.find(t => t.id === data.get('tradeId'));
+    if (existing) {
+      allExec.push(...(existing.executions||[]));
+      allHtf.push(...(existing.htfImages||[]));
+    }
+  }
+
+  for (const img of pendingImages.execution) {
+    await ImageDB.save(img.id, img.dataUrl);
+    allExec.push({ id: img.id, title: img.title });
+  }
+  for (const img of pendingImages.htf) {
+    await ImageDB.save(img.id, img.dataUrl);
+    allHtf.push({ id: img.id, title: img.title });
+  }
+
+  const tradeData = {
+    id: isEdit ? data.get('tradeId') : uid(),
+    journalId: state.currentJournalId,
+    date: data.get('date'),
+    tradeTime: data.get('tradeTime'),
+    ticker: data.get('ticker'),
+    confidence: parseInt(data.get('confidence')) || 5,
+    entryType: data.get('entryType'),
+    entryTriggers: Array.from(document.querySelectorAll('#entryTriggers .checkbox-pill.checked')).map(el => el.getAttribute('data-value')),
+    direction: data.get('direction'),
+    setup: data.get('setup'),
+    outcome,
+    outcomeReasons: uniqueReasons,
+    dollarAmount,
+    rr: parseFloat(data.get('rr')) || null,
+    realizedR,
+    dailyBias: data.get('dailyBias'),
+    htfPdArray: data.get('htfPdArray'),
+    marketEnvironment: data.get('marketEnvironment'),
+    emotions: data.get('emotions'),
+    executions: allExec,
+    htfImages: allHtf,
+    createdAt: isEdit ? (state.trades.find(t=>t.id===data.get('tradeId'))?.createdAt || new Date().toISOString()) : new Date().toISOString(),
+  };
+
+  if (isEdit) {
+    const oldTrade = state.trades.find(t => t.id === tradeData.id);
+    // Reverse old P&L, apply new
+    const journalIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
+    if (journalIdx >= 0 && oldTrade) {
+      state.journals[journalIdx].accountSize += (oldTrade.outcome === 'Win' ? -oldTrade.dollarAmount : oldTrade.dollarAmount);
+      state.journals[journalIdx].accountSize += (tradeData.outcome === 'Win' ? tradeData.dollarAmount : -tradeData.dollarAmount);
+    }
+    const idx = state.trades.findIndex(t => t.id === tradeData.id);
+    state.trades[idx] = tradeData;
+  } else {
+    const journalIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
+    if (journalIdx >= 0) {
+      state.journals[journalIdx].accountSize += (outcome === 'Win' ? dollarAmount : -dollarAmount);
+    }
+    state.trades.push(tradeData);
+  }
+
+  persistTrades();
+  persistJournals();
+  pendingImages.execution = [];
+  pendingImages.htf = [];
+  state.draftTrade = null;
+
+  navigate('tradeDetail', { tradeId: tradeData.id });
+}
+
+function confirmDeleteTrade(tradeId) {
+  if (!confirm('Delete this trade? This cannot be undone.')) return;
+  const t = state.trades.find(x => x.id === tradeId);
+  if (t) {
+    const journalIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
+    if (journalIdx >= 0) {
+      state.journals[journalIdx].accountSize += (t.outcome === 'Win' ? -t.dollarAmount : t.dollarAmount);
+    }
+    // Clean up images
+    (t.executions||[]).forEach(img => ImageDB.delete(img.id));
+    (t.htfImages||[]).forEach(img => ImageDB.delete(img.id));
+  }
+  state.trades = state.trades.filter(x => x.id !== tradeId);
+  persistTrades();
+  persistJournals();
+  navigate('history');
+}
+
+function handleSaveSettings(event) {
+  event.preventDefault();
+  const form = event.target;
+  const journalIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
+  if (journalIdx < 0) return;
+
+  const setups = Array.from(form.querySelectorAll('.setup-input')).map(i => i.value.trim()).filter(Boolean);
+  const winReasons = Array.from(form.querySelectorAll('.win-reason-input')).map(i => i.value.trim()).filter(Boolean);
+  const lossReasons = Array.from(form.querySelectorAll('.loss-reason-input')).map(i => i.value.trim()).filter(Boolean);
+  const entryTypes = Array.from(form.querySelectorAll('.entry-type-input')).map(i => i.value.trim()).filter(Boolean);
+  const entryTriggers = Array.from(form.querySelectorAll('.entry-trigger-input')).map(i => i.value.trim()).filter(Boolean);
+  state.journals[journalIdx].name = form.querySelector('[name=journalName]').value.trim();
+  state.journals[journalIdx].accountSize = parseFloat(form.querySelector('[name=accountSize]').value) || 0;
+  state.journals[journalIdx].fixedR = parseFloat(form.querySelector('[name=fixedR]').value) || 0;
+  state.journals[journalIdx].setups = setups;
+  state.journals[journalIdx].winReasons = winReasons;
+  state.journals[journalIdx].lossReasons = lossReasons;
+  state.journals[journalIdx].entryTypes = entryTypes;
+  state.journals[journalIdx].entryTriggers = entryTriggers;
+  // Sync setup details keys with updated setups list
+  const details = state.journals[journalIdx].setupDetails || {};
+  setups.forEach(s => { if (!details[s]) details[s] = { description: '', imageIds: [] }; });
+  state.journals[journalIdx].setupDetails = details;
+  persistJournals();
+  showToast('Settings saved!');
+  render();
+}
+
+function addSetupField() {
+  const list = document.getElementById('setupList');
+  const idx = list.children.length;
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;align-items:center;gap:8px';
+  div.innerHTML = `<input type="text" class="form-input setup-input" data-index="${idx}" style="flex:1" placeholder="Setup name...">
+    <button type="button" class="btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>`;
+  list.appendChild(div);
+  div.querySelector('input').focus();
+}
+
+function removeSetup(index) {
+  const list = document.getElementById('setupList');
+  if (list.children[index]) list.children[index].remove();
+}
+
+function addReasonField(listId, cls) {
+  const list = document.getElementById(listId);
+  if (!list) return;
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;align-items:center;gap:8px';
+  div.innerHTML = `<input type="text" class="form-input ${cls}" style="flex:1" placeholder="Reason...">
+    <button type="button" class="btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>`;
+  list.appendChild(div);
+  div.querySelector('input').focus();
+}
+
+function confirmDeleteJournal() {
+  const j = currentJournal();
+  const count = journalTrades().length;
+  if (!confirm(`⚠️ Are you sure you want to delete "${j.name}"?\n\nThis will permanently delete ${count} trade${count !== 1 ? 's' : ''} and cannot be undone.`)) return;
+  const trades = journalTrades();
+  trades.forEach(t => {
+    (t.executions||[]).forEach(img => ImageDB.delete(img.id));
+    (t.htfImages||[]).forEach(img => ImageDB.delete(img.id));
+  });
+  state.trades = state.trades.filter(t => t.journalId !== state.currentJournalId);
+  state.journals = state.journals.filter(j => j.id !== state.currentJournalId);
+  persistTrades();
+  persistJournals();
+  state.currentJournalId = null;
+  DB.setCurrentJournalId(null);
+  render();
+}
+
+function attachListeners() {
+  if (state.view === 'newTrade' && state.editTradeId) {
+    // Editing an existing trade: restore outcome reasons and images
+    const t = state.trades.find(x => x.id === state.editTradeId);
+    if (t && t.outcome) {
+      updateOutcomeReasons(t.outcome, t.outcomeReasons || []);
+    }
+    if (t) {
+      Promise.all((t.executions||[]).map(async img => {
+        const dataUrl = await ImageDB.get(img.id);
+        return { ...img, dataUrl };
+      })).then(imgs => {
+        const container = document.getElementById('executionImages');
+        if (container) container.innerHTML = imgs.filter(i=>i.dataUrl).map(img=>`
+          <div class="image-thumb">
+            <img src="${img.dataUrl}" alt="${escHtml(img.title)}">
+            <div style="font-size:11px;color:#64748b;text-align:center;margin-top:3px">${escHtml(img.title)}</div>
+          </div>`).join('');
+      });
+      Promise.all((t.htfImages||[]).map(async img => {
+        const dataUrl = await ImageDB.get(img.id);
+        return { ...img, dataUrl };
+      })).then(imgs => {
+        const container = document.getElementById('htfImages');
+        if (container) container.innerHTML = imgs.filter(i=>i.dataUrl).map(img=>`
+          <div class="image-thumb">
+            <img src="${img.dataUrl}" alt="${escHtml(img.title)}">
+            <div style="font-size:11px;color:#64748b;text-align:center;margin-top:3px">${escHtml(img.title)}</div>
+          </div>`).join('');
+      });
+    }
+  }
+  if (state.view === 'newTrade' && !state.editTradeId) {
+    // New trade: restore draft's outcome reasons if any
+    const draft = state.draftTrade;
+    if (draft && draft.outcome) {
+      updateOutcomeReasons(draft.outcome, draft.outcomeReasons || []);
+    }
+    // Only clear pending images if there's no draft (fresh form)
+    if (!draft) {
+      pendingImages.execution = [];
+      pendingImages.htf = [];
+    } else {
+      // Restore pending image previews
+      renderImagePreviews('execution');
+      renderImagePreviews('htf');
+    }
+  }
+  if (state.view === 'setups' && state.selectedSetup) {
+    loadSetupImages(state.selectedSetup);
+  }
+}
+
+// ============================================================
+//  SETUPS PAGE
+// ============================================================
+function renderSetups() {
+  const j = currentJournal();
+  // Migrate existing journals that don't have setupDetails yet
+  if (!j.setupDetails) {
+    const jIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
+    state.journals[jIdx].setupDetails = Object.fromEntries((j.setups || DEFAULT_SETUPS).map(s => [s, { description: '', imageIds: [] }]));
+    persistJournals();
+  }
+  const setups = j.setups || DEFAULT_SETUPS;
+  const details = j.setupDetails || {};
+  const trades = journalTrades();
+  const setupStats = calcSetupStats(trades);
+  const statsMap = Object.fromEntries(setupStats.map(s => [s.setup, s]));
+  const sel = state.selectedSetup;
+
+  const cards = setups.map(name => {
+    const d = details[name] || { description: '', imageIds: [] };
+    const s = statsMap[name];
+    const isSelected = sel === name;
+    return `
+    <div id="setup-card-${encodeURIComponent(name)}" class="card" style="margin-bottom:14px;border-color:${isSelected?'#3b82f6':'#1e293b'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${isSelected?'16px':'0'}">
+        <div style="display:flex;align-items:center;gap:14px;flex:1;cursor:pointer" onclick="state.selectedSetup=state.selectedSetup==='${escHtml(name)}'?null:'${escHtml(name)}';navigate('setups')">
+          <div>
+            <div style="font-size:16px;font-weight:700">${escHtml(name)}</div>
+            ${s ? `<div style="font-size:12px;color:#64748b;margin-top:2px">${s.count} trades · <span style="color:${s.winRate>=50?'#10b981':'#ef4444'}">${s.winRate.toFixed(0)}% win</span> · <span style="color:${s.totalPnl>=0?'#10b981':'#ef4444'}">${fmt$(s.totalPnl)}</span></div>` : '<div style="font-size:12px;color:#64748b">No trades yet</div>'}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          ${s ? `<div style="display:flex;gap:8px">
+            <span class="win-badge">${s.wins}W</span>
+            <span class="loss-badge">${s.losses}L</span>
+          </div>` : ''}
+          <button class="btn-secondary btn-sm" onclick="state.selectedSetup=state.selectedSetup==='${escHtml(name)}'?null:'${escHtml(name)}';navigate('setups')" style="min-width:64px">
+            ${isSelected ? 'Close' : 'Edit'}
+          </button>
+          <button class="btn-danger btn-sm" onclick="confirmDeleteSetup('${escHtml(name)}')">✕</button>
+        </div>
+      </div>
+
+      ${isSelected ? `
+      <div>
+        <div style="margin-bottom:14px">
+          <label class="label">Description / Notes</label>
+          <textarea id="setup-desc-${encodeURIComponent(name)}" class="form-input" rows="4" placeholder="Explain the setup, rules, conditions..." style="resize:vertical">${escHtml(d.description||'')}</textarea>
+        </div>
+        <div style="margin-bottom:14px">
+          <label class="label">Example Images</label>
+          <div id="setup-imgs-${encodeURIComponent(name)}" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px"></div>
+          <div class="image-upload-area" onclick="document.getElementById('setup-upload-${encodeURIComponent(name)}').click()">
+            <svg width="20" height="20" fill="none" stroke="#64748b" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 4px"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+            <div style="font-size:12px;color:#64748b">Upload example images</div>
+          </div>
+          <input type="file" id="setup-upload-${encodeURIComponent(name)}" accept="image/*" multiple style="display:none" onchange="handleSetupImageUpload(this,'${escHtml(name)}')">
+        </div>
+        ${s ? `
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+          ${statCard('Trades', s.count, null, '#3b82f6')}
+          ${statCard('Win Rate', fmtPct(s.winRate), null, s.winRate>=50?'#10b981':'#ef4444')}
+          ${statCard('Total P&L', fmt$(s.totalPnl), null, s.totalPnl>=0?'#10b981':'#ef4444')}
+          ${statCard('Avg P&L', fmt$(s.avgPnl), null, s.avgPnl>=0?'#10b981':'#ef4444')}
+        </div>` : ''}
+        <button class="btn-primary btn-sm" onclick="saveSetupDetail('${escHtml(name)}')">Save</button>
+      </div>` : `
+      ${d.description ? `<div style="font-size:13px;color:#64748b;margin-top:8px;line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(d.description)}</div>` : ''}
+      `}
+    </div>`;
+  });
+
+  return `
+  <div style="padding:28px;max-width:860px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+      <h1 style="font-size:22px;font-weight:700;margin:0">Setups</h1>
+      <button class="btn-primary" onclick="showCreateSetupModal()">+ New Setup</button>
+    </div>
+    ${setups.length ? cards.join('') : `<div class="card" style="text-align:center;padding:40px;color:#64748b">No setups yet. <button class="btn-primary btn-sm" onclick="showCreateSetupModal()" style="margin-left:8px">Create your first setup</button></div>`}
+  </div>`;
+}
+
+function loadSetupImages(setupName) {
+  const j = currentJournal();
+  const d = (j.setupDetails || {})[setupName] || { imageIds: [] };
+  const container = document.getElementById('setup-imgs-' + encodeURIComponent(setupName));
+  if (!container) return;
+  Promise.all(d.imageIds.map(async id => {
+    const dataUrl = await ImageDB.get('setup_' + id);
+    return { id, dataUrl };
+  })).then(imgs => {
+    container.innerHTML = imgs.filter(i => i.dataUrl).map(img => `
+      <div class="image-thumb">
+        <img src="${img.dataUrl}" style="width:100px;height:70px;object-fit:cover;border-radius:6px;border:1px solid #334155;cursor:pointer" class="preview-img" data-fullsrc="${escHtml(img.dataUrl)}">
+        <button class="remove-img" onclick="deleteSetupImage('${escHtml(setupName)}','${img.id}')">✕</button>
+      </div>`).join('');
+    container.querySelectorAll('.preview-img').forEach(el => {
+      el.addEventListener('click', () => previewImage(el.getAttribute('data-fullsrc')));
+    });
+  });
+}
+
+function handleSetupImageUpload(input, setupName) {
+  Array.from(input.files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = async e => {
+      const id = uid();
+      await ImageDB.save('setup_' + id, e.target.result);
+      const jIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
+      if (!state.journals[jIdx].setupDetails) state.journals[jIdx].setupDetails = {};
+      if (!state.journals[jIdx].setupDetails[setupName]) state.journals[jIdx].setupDetails[setupName] = { description: '', imageIds: [] };
+      state.journals[jIdx].setupDetails[setupName].imageIds.push(id);
+      persistJournals();
+      loadSetupImages(setupName);
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+}
+
+function deleteSetupImage(setupName, imageId) {
+  const jIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
+  if (jIdx < 0) return;
+  ImageDB.delete('setup_' + imageId);
+  const d = state.journals[jIdx].setupDetails?.[setupName];
+  if (d) d.imageIds = d.imageIds.filter(i => i !== imageId);
+  persistJournals();
+  loadSetupImages(setupName);
+}
+
+function saveSetupDetail(setupName) {
+  const jIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
+  if (jIdx < 0) return;
+  const desc = document.getElementById('setup-desc-' + encodeURIComponent(setupName))?.value || '';
+  if (!state.journals[jIdx].setupDetails) state.journals[jIdx].setupDetails = {};
+  if (!state.journals[jIdx].setupDetails[setupName]) state.journals[jIdx].setupDetails[setupName] = { description: '', imageIds: [] };
+  state.journals[jIdx].setupDetails[setupName].description = desc;
+  persistJournals();
+  showToast('Setup saved!');
+}
+
+function showCreateSetupModal() {
+  const existing = document.getElementById('createSetupModal');
+  if (existing) existing.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+  <div class="modal-overlay" id="createSetupModal">
+    <div class="modal" style="width:380px">
+      <h2 style="font-size:18px;font-weight:700;margin:0 0 16px">New Setup</h2>
+      <form onsubmit="handleCreateSetup(event)">
+        <label class="label">Setup Name</label>
+        <input type="text" name="setupName" class="form-input" placeholder="e.g. BOS Retest" style="margin-bottom:16px" required autofocus>
+        <div style="display:flex;gap:10px">
+          <button type="submit" class="btn-primary">Create</button>
+          <button type="button" class="btn-secondary" onclick="document.getElementById('createSetupModal').remove()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>`);
+}
+
+function handleCreateSetup(event) {
+  event.preventDefault();
+  const name = event.target.querySelector('[name=setupName]').value.trim();
+  if (!name) return;
+  const jIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
+  if (jIdx < 0) return;
+  if ((state.journals[jIdx].setups || []).includes(name)) {
+    alert(`Setup "${name}" already exists.`); return;
+  }
+  state.journals[jIdx].setups = [...(state.journals[jIdx].setups || DEFAULT_SETUPS), name];
+  if (!state.journals[jIdx].setupDetails) state.journals[jIdx].setupDetails = {};
+  state.journals[jIdx].setupDetails[name] = { description: '', imageIds: [] };
+  persistJournals();
+  document.getElementById('createSetupModal')?.remove();
+  state.selectedSetup = name;
+  navigate('setups');
+}
+
+function confirmDeleteSetup(name) {
+  if (!confirm(`Delete setup "${name}"? This won't affect existing trades.`)) return;
+  const jIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
+  if (jIdx < 0) return;
+  // Clean up images
+  const d = state.journals[jIdx].setupDetails?.[name];
+  if (d) d.imageIds.forEach(id => ImageDB.delete('setup_' + id));
+  state.journals[jIdx].setups = (state.journals[jIdx].setups || []).filter(s => s !== name);
+  if (state.journals[jIdx].setupDetails) delete state.journals[jIdx].setupDetails[name];
+  persistJournals();
+  if (state.selectedSetup === name) state.selectedSetup = null;
+  navigate('setups');
+}
+
+// ============================================================
+//  EXPORT
+// ============================================================
+function showExportModal() {
+  const existing = document.getElementById('exportModal');
+  if (existing) existing.remove();
+  const html = `
+  <div class="modal-overlay" id="exportModal">
+    <div class="modal" style="width:420px">
+      <h2 style="font-size:18px;font-weight:700;margin:0 0 6px">Export Trades</h2>
+      <p style="color:#64748b;font-size:13px;margin:0 0 20px">Choose a date range and format</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div>
+          <label class="label">From</label>
+          <input type="date" id="exportFrom" class="form-input">
+        </div>
+        <div>
+          <label class="label">To</label>
+          <input type="date" id="exportTo" class="form-input" value="${new Date().toISOString().slice(0,10)}">
+        </div>
+      </div>
+      <div style="font-size:13px;color:#64748b;margin-bottom:16px">Leave blank to export all trades</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn-primary" onclick="runExport('pdf')">Download PDF</button>
+        <button class="btn-secondary" onclick="runExport('csv')">Download CSV</button>
+        <button class="btn-secondary" onclick="document.getElementById('exportModal').remove()">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function runExport(format) {
+  const from = document.getElementById('exportFrom')?.value;
+  const to = document.getElementById('exportTo')?.value;
+  let trades = journalTrades().sort((a,b) => new Date(a.date)-new Date(b.date));
+  if (from) trades = trades.filter(t => t.date >= from);
+  if (to) trades = trades.filter(t => t.date <= to);
+  document.getElementById('exportModal')?.remove();
+  if (!trades.length) { alert('No trades found in that date range.'); return; }
+  if (format === 'csv') exportCSV(trades);
+  else exportPDF(trades, from, to);
+}
+
+function exportCSV(trades) {
+  const headers = ['Date','Time','Ticker','Direction','Setup','Confidence','Outcome','Outcome Reasons','$ Amount','Realized R','Intended RR','Daily Bias','HTF PD Array','Market Env','Emotions'];
+  const rows = trades.map(t => [
+    t.date, t.tradeTime ? formatTime(t.tradeTime) : '', t.ticker||'', t.direction||'', t.setup||'',
+    t.confidence||'', t.outcome||'', (t.outcomeReasons||[]).join('; '),
+    t.dollarAmount||0, (t.realizedR||0).toFixed(2), t.rr||'',
+    t.dailyBias||'', t.htfPdArray||'', t.marketEnvironment||'',
+    (t.emotions||'').replace(/\n/g,' '),
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = `trades_${currentJournal().name.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function exportPDF(trades, from, to) {
+  const { jsPDF } = window.jspdf;
+  if (!jsPDF) { alert('PDF library not loaded. Please check your internet connection.'); return; }
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const j = currentJournal();
+  const dateRange = from || to ? ` (${from||'start'} → ${to||'today'})` : '';
+  const wins = trades.filter(t => t.outcome==='Win').length;
+  const totalPnl = trades.reduce((s,t) => s + (t.outcome==='Win'?t.dollarAmount:-t.dollarAmount), 0);
+
+  // Header
+  doc.setFillColor(13, 20, 36);
+  doc.rect(0, 0, 297, 297, 'F');
+  doc.setTextColor(226, 232, 240);
+  doc.setFontSize(18); doc.setFont('helvetica','bold');
+  doc.text(j.name + ' — Trade Journal', 14, 16);
+  doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Exported ${new Date().toLocaleDateString()}${dateRange}   |   ${trades.length} trades   |   Win rate: ${trades.length?(wins/trades.length*100).toFixed(1):0}%   |   Total P&L: ${totalPnl>=0?'+':''}$${totalPnl.toFixed(2)}`, 14, 23);
+
+  // Table
+  doc.autoTable({
+    startY: 28,
+    head: [['Date','Time','Ticker','Setup','Conf.','Direction','Outcome','$ Amount','Real. R','Int. RR','Bias']],
+    body: trades.map(t => [
+      t.date,
+      t.tradeTime ? formatTime(t.tradeTime) : '—',
+      t.ticker||'—',
+      t.setup||'—',
+      t.confidence ? t.confidence+'/10' : '—',
+      t.direction||'—',
+      t.outcome,
+      (t.outcome==='Win'?'+':'-')+'$'+Math.abs(t.dollarAmount||0).toFixed(2),
+      (t.outcome==='Win'?'+':'-')+(t.realizedR||0).toFixed(2)+'R',
+      t.rr||'—',
+      t.dailyBias||'—',
+    ]),
+    styles: { fillColor: [10, 15, 30], textColor: [226, 232, 240], fontSize: 9, cellPadding: 3 },
+    headStyles: { fillColor: [30, 41, 59], textColor: [148, 163, 184], fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [13, 20, 36] },
+    didParseCell(data) {
+      if (data.section === 'body' && data.column.index === 6) {
+        data.cell.styles.textColor = data.cell.raw === 'Win' ? [16, 185, 129] : [239, 68, 68];
+        data.cell.styles.fontStyle = 'bold';
+      }
+      if (data.section === 'body' && data.column.index === 7) {
+        data.cell.styles.textColor = data.cell.raw.startsWith('+') ? [16, 185, 129] : [239, 68, 68];
+      }
+    },
+    margin: { left: 14, right: 14 },
+  });
+
+  doc.save(`trades_${j.name.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.pdf`);
+}
+
+// ============================================================
+//  JOURNAL SELECTOR
+// ============================================================
+function showJournalSelector() {
+  const journals = state.journals;
+  const html = `
+  <div class="modal-overlay" id="journalModal">
+    <div class="modal">
+      <h2 style="font-size:20px;font-weight:700;margin:0 0 4px">Trade Journals</h2>
+      <p style="color:#64748b;font-size:14px;margin:0 0 20px">Select or create a journal</p>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
+        ${journals.map(j => `
+        <div class="journal-card" onclick="selectJournal('${j.id}')">
+          <div style="font-weight:600;font-size:16px">${escHtml(j.name)}</div>
+          <div style="font-size:13px;color:#64748b;margin-top:3px">
+            Balance: <span style="color:#10b981">$${(j.accountSize||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span> &nbsp;·&nbsp;
+            ${state.trades.filter(t=>t.journalId===j.id).length} trades
+          </div>
+        </div>`).join('') || '<div style="color:#64748b;text-align:center;padding:20px">No journals yet</div>'}
+      </div>
+      <div class="divider"></div>
+      <h3 style="font-size:15px;font-weight:600;margin:16px 0 12px">Create New Journal</h3>
+      <form onsubmit="handleCreateJournal(event)">
+        <div style="margin-bottom:12px">
+          <label class="label">Journal Name</label>
+          <input type="text" name="journalName" class="form-input" placeholder="e.g. NQ Futures, Main Account" required>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div>
+            <label class="label">Account Size ($)</label>
+            <input type="number" name="accountSize" class="form-input" placeholder="50000" step="0.01" min="0" required>
+          </div>
+          <div>
+            <label class="label">Fixed R ($)</label>
+            <input type="number" name="fixedR" class="form-input" placeholder="250" step="0.01" min="0" required>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button type="submit" class="btn-primary">Create Journal</button>
+          ${journals.length ? `<button type="button" class="btn-secondary" onclick="document.getElementById('journalModal').remove()">Cancel</button>` : ''}
+        </div>
+      </form>
+    </div>
+  </div>`;
+  const existing = document.getElementById('journalModal');
+  if (existing) existing.remove();
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function selectJournal(id) {
+  state.currentJournalId = id;
+  DB.setCurrentJournalId(id);
+  const modal = document.getElementById('journalModal');
+  if (modal) modal.remove();
+  state.view = 'dashboard';
+  render();
+}
+
+function handleCreateJournal(event) {
+  event.preventDefault();
+  const form = event.target;
+  const name = form.querySelector('[name=journalName]').value.trim();
+  const accountSize = parseFloat(form.querySelector('[name=accountSize]').value) || 0;
+  const fixedR = parseFloat(form.querySelector('[name=fixedR]').value) || 0;
+  const journal = {
+    id: uid(),
+    name,
+    accountSize,
+    initialAccountSize: accountSize,
+    fixedR,
+    setups: [...DEFAULT_SETUPS],
+    winReasons: [...WIN_REASONS],
+    lossReasons: [...LOSS_REASONS],
+    entryTypes: [...DEFAULT_ENTRY_TYPES],
+    entryTriggers: [...DEFAULT_ENTRY_TRIGGERS],
+    setupDetails: Object.fromEntries(DEFAULT_SETUPS.map(s => [s, { description: '', imageIds: [] }])),
+    createdAt: new Date().toISOString(),
+  };
+  state.journals.push(journal);
+  persistJournals();
+  selectJournal(journal.id);
+}
+
+// ============================================================
+//  TOAST
+// ============================================================
+function showToast(msg, type = 'success') {
+  const t = document.createElement('div');
+  t.style.cssText = `position:fixed;bottom:20px;right:20px;background:${type==='success'?'#10b981':'#ef4444'};color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:600;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,0.3);transition:opacity 0.3s`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 2500);
+}
+
+// ============================================================
+//  MAIN RENDER
+// ============================================================
+function render() {
+  if (!state.currentJournalId || !state.journals.find(j => j.id === state.currentJournalId)) {
+    document.getElementById('app').innerHTML = '';
+    showJournalSelector();
+  } else {
+    renderApp();
+  }
+}
+
+// ============================================================
+//  INIT
+// ============================================================
+async function init() {
+  await ImageDB.init();
+  loadState();
+  render();
+}
+
+init();
+</script>
+</body>
+</html>
