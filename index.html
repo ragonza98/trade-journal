@@ -502,19 +502,13 @@ function renderNewTrade() {
           </div>
         </div>
         <div id="missedFields" style="display:${v('outcome')==='Missed'?'block':'none'}">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-            <div>
-              <label class="label">Hypothetical Outcome</label>
-              <select name="hypotheticalOutcome" class="form-select" onchange="saveDraft()">
-                <option value="">Unknown</option>
-                <option value="Win" ${v('hypotheticalOutcome')==='Win'?'selected':''}>Would have been a Win</option>
-                <option value="Loss" ${v('hypotheticalOutcome')==='Loss'?'selected':''}>Would have been a Loss</option>
-              </select>
-            </div>
-            <div>
-              <label class="label">Potential $ Amount</label>
-              <input type="number" name="dollarAmountMissed" class="form-input" placeholder="e.g. 500" step="0.01" min="0" value="${v('dollarAmount')}" oninput="calcRealizedR();saveDraft()">
-            </div>
+          <div style="margin-bottom:14px">
+            <label class="label">Hypothetical Outcome</label>
+            <select name="hypotheticalOutcome" class="form-select" onchange="saveDraft()" style="max-width:260px">
+              <option value="">Unknown</option>
+              <option value="Win" ${v('hypotheticalOutcome')==='Win'?'selected':''}>Would have been a Win</option>
+              <option value="Loss" ${v('hypotheticalOutcome')==='Loss'?'selected':''}>Would have been a Loss</option>
+            </select>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
@@ -663,7 +657,7 @@ function renderHistory() {
   });
   const f = state.historyFilter;
   const hasFilter = f.setup||f.outcome||f.search||f.dateFrom||f.dateTo||f.month!==''&&f.month!==undefined&&f.month||f.year||f.dayOfWeek!=='';
-  const totalPnl = trades.reduce((s,t) => s + (t.outcome==='Win'?t.dollarAmount:-t.dollarAmount), 0);
+  const totalPnl = trades.filter(t => t.outcome !== 'Missed').reduce((s,t) => s + (t.outcome==='Win'?t.dollarAmount:-t.dollarAmount), 0);
   const allYears = [...new Set(allTrades.map(t => new Date(t.date+'T00:00:00').getFullYear()))].sort((a,b)=>b-a);
 
   return `
@@ -1177,8 +1171,6 @@ function updateOutcomeReasons(outcome, selectedReasons = []) {
 function updateMissedFields(outcome) {
   const el = document.getElementById('missedFields');
   if (el) el.style.display = outcome === 'Missed' ? 'block' : 'none';
-  const regularDollar = document.querySelector('[name=dollarAmount]');
-  if (regularDollar) regularDollar.closest('div').style.display = outcome === 'Missed' ? 'none' : 'block';
 }
 
 function togglePill(el) {
@@ -1232,7 +1224,7 @@ async function handleSaveTrade(event) {
 
   const outcome = data.get('outcome');
   const isMissed = outcome === 'Missed';
-  const dollarAmount = parseFloat(isMissed ? data.get('dollarAmountMissed') : data.get('dollarAmount')) || 0;
+  const dollarAmount = parseFloat(data.get('dollarAmount')) || 0;
   const fixedR = j.fixedR || 1;
   const realizedR = parseFloat(data.get('realizedR')) || (dollarAmount / fixedR);
 
@@ -1717,7 +1709,7 @@ function exportPDF(trades, from, to) {
   const j = currentJournal();
   const dateRange = from || to ? ` (${from||'start'} → ${to||'today'})` : '';
   const wins = trades.filter(t => t.outcome==='Win').length;
-  const totalPnl = trades.reduce((s,t) => s + (t.outcome==='Win'?t.dollarAmount:-t.dollarAmount), 0);
+  const totalPnl = trades.filter(t => t.outcome !== 'Missed').reduce((s,t) => s + (t.outcome==='Win'?t.dollarAmount:-t.dollarAmount), 0);
 
   // Header
   doc.setFillColor(13, 20, 36);
