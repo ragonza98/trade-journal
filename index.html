@@ -1061,6 +1061,18 @@ function renderSettings() {
         <button type="button" class="btn-secondary btn-sm" onclick="addReasonField('lossReasonList','loss-reason-input')">+ Add Loss Reason</button>
       </div>
 
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Backup & Transfer</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:14px">Export all your journals and trades to a file. Use this to back up your data or transfer it to another device/browser.</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <button type="button" class="btn-primary" onclick="exportJSON()">Export All Data</button>
+          <label style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:9px 18px;cursor:pointer;font-size:14px;transition:background 0.15s" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='#1e293b'">
+            Import Data
+            <input type="file" accept=".json" style="display:none" onchange="importJSON(this)">
+          </label>
+        </div>
+      </div>
+
       <div class="card" style="margin-bottom:24px">
         <div style="font-size:13px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Danger Zone</div>
         <div style="display:flex;gap:12px">
@@ -1785,6 +1797,97 @@ function handleCreateJournal(event) {
   state.journals.push(journal);
   persistJournals();
   selectJournal(journal.id);
+}
+
+// ============================================================
+//  BACKUP & TRANSFER
+// ============================================================
+async function exportJSON() {
+  showToast('Preparing export, please wait...');
+
+  // Collect all image IDs referenced across trades and setups
+  const trades = DB.getTrades();
+  const journals = DB.getJournals();
+  const imageIds = [];
+  trades.forEach(t => {
+    (t.executions || []).forEach(img => imageIds.push({ key: img.id, prefix: '' }));
+    (t.htfImages || []).forEach(img => imageIds.push({ key: img.id, prefix: '' }));
+  });
+  journals.forEach(j => {
+    Object.values(j.setupDetails || {}).forEach(d => {
+      (d.imageIds || []).forEach(id => imageIds.push({ key: id, prefix: 'setup_' }));
+    });
+  });
+
+  // Load all images from IndexedDB
+  const images = {};
+  await Promise.all(imageIds.map(async ({ key, prefix }) => {
+    const dataUrl = await ImageDB.get(prefix + key);
+    if (dataUrl) images[prefix + key] = dataUrl;
+  }));
+
+  const payload = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    journals,
+    trades,
+    images,
+  };
+
+  const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `trade-journal-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Export complete!');
+}
+
+async function importJSON(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+
+  const text = await file.text();
+  let payload;
+  try { payload = JSON.parse(text); } catch {
+    showToast('Invalid file — could not read JSON.', 'error'); return;
+  }
+
+  if (!payload.journals || !payload.trades) {
+    showToast('Invalid backup file.', 'error'); return;
+  }
+
+  if (!confirm(`This will import ${payload.journals.length} journal(s) and ${payload.trades.length} trade(s).\n\nYour existing data will be kept — imported journals will be added alongside it.\n\nContinue?`)) return;
+
+  showToast('Importing, please wait...');
+
+  // Merge journals (avoid duplicates by id)
+  const existingJournals = DB.getJournals();
+  const existingIds = new Set(existingJournals.map(j => j.id));
+  const newJournals = payload.journals.filter(j => !existingIds.has(j.id));
+  DB.saveJournals([...existingJournals, ...newJournals]);
+
+  // Merge trades
+  const existingTrades = DB.getTrades();
+  const existingTradeIds = new Set(existingTrades.map(t => t.id));
+  const newTrades = payload.trades.filter(t => !existingTradeIds.has(t.id));
+  DB.saveTrades([...existingTrades, ...newTrades]);
+
+  // Restore images
+  const images = payload.images || {};
+  await Promise.all(Object.entries(images).map(([key, dataUrl]) => ImageDB.save(key, dataUrl)));
+
+  // Switch to first imported journal if any
+  if (newJournals.length > 0) {
+    state.currentJournalId = newJournals[0].id;
+    DB.setCurrentJournalId(newJournals[0].id);
+  }
+
+  loadState();
+  showToast(`Imported ${newJournals.length} journal(s) and ${newTrades.length} trade(s)!`);
+  setTimeout(() => { state.view = 'dashboard'; render(); }, 1000);
 }
 
 // ============================================================
