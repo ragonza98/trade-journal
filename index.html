@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Trade Journal</title>
+  <title>Uptrendy</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -32,7 +32,7 @@
     .btn-danger { background: #ef4444; color: #fff; border: none; border-radius: 6px; padding: 7px 14px; cursor: pointer; font-size: 13px; transition: background 0.15s; }
     .btn-danger:hover { background: #dc2626; }
     .btn-sm { padding: 5px 12px; font-size: 13px; }
-    .label { display: block; font-size: 12px; font-weight: 600; color: #94a3b8; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .label { display: block; font-size: 13px; font-weight: 700; color: #cbd5e1; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
     .win-badge { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
     .loss-badge { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
     .missed-badge { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
@@ -69,6 +69,11 @@
     input[type=range]::-webkit-slider-thumb:hover { background: #60a5fa; }
     .confidence-track { position: relative; padding-top: 8px; }
     .confidence-labels { display: flex; justify-content: space-between; font-size: 11px; color: #64748b; margin-top: 4px; }
+    .plan-outcome-opt { display:inline-flex;align-items:center;padding:8px 20px;border-radius:6px;border:1px solid #334155;background:#1e293b;color:#94a3b8;cursor:pointer;font-size:14px;font-weight:600;transition:all 0.15s; }
+    .plan-outcome-opt:hover { border-color: #475569; color: #e2e8f0; }
+    .plan-outcome-opt.sel-followed { background:rgba(16,185,129,0.15);border-color:#10b981;color:#10b981; }
+    .plan-outcome-opt.sel-adapted { background:rgba(59,130,246,0.15);border-color:#3b82f6;color:#60a5fa; }
+    .plan-outcome-opt.sel-didnt { background:rgba(239,68,68,0.15);border-color:#ef4444;color:#ef4444; }
   </style>
 </head>
 <body>
@@ -88,6 +93,10 @@ const DB = {
   saveJournals(j) { this.set('journals', j); },
   getTrades() { return this.get('trades', []); },
   saveTrades(t) { this.set('trades', t); },
+  getPlans() { return this.get('plans', []); },
+  savePlans(p) { this.set('plans', p); },
+  getPersonalization() { return this.get('personalization', null); },
+  savePersonalization(p) { this.set('personalization', p); },
   getCurrentJournalId() { return this.get('currentJournalId', null); },
   setCurrentJournalId(id) { this.set('currentJournalId', id); },
 };
@@ -135,13 +144,19 @@ const ImageDB = {
 const state = {
   journals: [],
   trades: [],
+  plans: [],
+  personalization: { setups: [], entryTypes: [], entryTriggers: [], winReasons: [], lossReasons: [], missedReasons: [], biasReasons: [] },
   currentJournalId: null,
   view: 'dashboard',
   editTradeId: null,
   historyFilter: { setup: '', outcome: '', search: '', dateFrom: '', dateTo: '', month: '', year: '', dayOfWeek: '' },
   statsTab: 'setup',
+  settingsTab: 'journal',
   draftTrade: null,
   selectedSetup: null,
+  selectedPlanId: null,
+  premarketFormDate: '',
+  premarketListMonth: '',
 };
 
 const WIN_REASONS = ['HTF pd array', 'Valid setup', 'Patience', 'W/ daily bias', 'Clear imbalance'];
@@ -150,6 +165,7 @@ const DEFAULT_SETUPS = ['OTE', 'OTE RP', 'OFR', 'Failed Long', 'Failed Short', '
 const DEFAULT_ENTRY_TYPES = ['Aggressive MSS', 'Retracement MSS', 'Aggressive iFVG', 'Retracement iFVG'];
 const DEFAULT_ENTRY_TRIGGERS = ['Protected swing break', 'iFVG', 'Anticipation'];
 const DEFAULT_MISSED_REASONS = ['Not at screen', 'Hesitation', 'Already in a trade', 'Missed entry', 'Didn\'t trust setup', 'Risk limit reached'];
+const DEFAULT_BIAS_REASONS = ['HTF Structure', 'HTF PD Array', 'Liquidity', 'Daily Range', 'News/Catalyst'];
 
 // ============================================================
 //  HELPERS
@@ -166,6 +182,9 @@ function formatTime(t) {
 }
 function currentJournal() { return state.journals.find(j => j.id === state.currentJournalId); }
 function journalTrades(jid = state.currentJournalId) { return state.trades.filter(t => t.journalId === jid); }
+function journalPlans(jid = state.currentJournalId) { return state.plans.filter(p => p.journalId === jid); }
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function todayPlan() { return journalPlans().find(p => p.date === todayStr()); }
 function fmt$(n) { if (n == null || isNaN(n)) return '-'; const sign = n >= 0 ? '+' : ''; return sign + '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function fmtR(n) { if (n == null || isNaN(n)) return '-'; return (n >= 0 ? '+' : '') + n.toFixed(2) + 'R'; }
 function fmtPct(n) { return n.toFixed(1) + '%'; }
@@ -174,10 +193,29 @@ function escHtml(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,
 function loadState() {
   state.journals = DB.getJournals();
   state.trades = DB.getTrades();
+  state.plans = DB.getPlans();
   state.currentJournalId = DB.getCurrentJournalId();
+  // Load global personalization, migrating from current journal if first run
+  let p = DB.getPersonalization();
+  if (!p) {
+    const j = state.journals.find(jj => jj.id === state.currentJournalId) || state.journals[0];
+    p = {
+      setups: (j && j.setups && j.setups.length) ? j.setups : DEFAULT_SETUPS,
+      entryTypes: (j && j.entryTypes && j.entryTypes.length) ? j.entryTypes : DEFAULT_ENTRY_TYPES,
+      entryTriggers: (j && j.entryTriggers && j.entryTriggers.length) ? j.entryTriggers : DEFAULT_ENTRY_TRIGGERS,
+      winReasons: (j && j.winReasons && j.winReasons.length) ? j.winReasons : WIN_REASONS,
+      lossReasons: (j && j.lossReasons && j.lossReasons.length) ? j.lossReasons : LOSS_REASONS,
+      missedReasons: (j && j.missedReasons && j.missedReasons.length) ? j.missedReasons : DEFAULT_MISSED_REASONS,
+      biasReasons: (j && j.biasReasons && j.biasReasons.length) ? j.biasReasons : DEFAULT_BIAS_REASONS,
+    };
+    DB.savePersonalization(p);
+  }
+  state.personalization = p;
 }
 function persistTrades() { DB.saveTrades(state.trades); }
 function persistJournals() { DB.saveJournals(state.journals); }
+function persistPlans() { DB.savePlans(state.plans); }
+function persistPersonalization() { DB.savePersonalization(state.personalization); }
 
 // ============================================================
 //  NAVIGATION
@@ -187,8 +225,10 @@ function navigate(view, opts = {}) {
   if (opts.tradeId !== undefined) {
     state.editTradeId = opts.tradeId;
   } else if (view === 'newTrade') {
-    state.editTradeId = null; // always clear when opening a fresh New Trade
+    state.editTradeId = null;
   }
+  if (opts.planId !== undefined) state.selectedPlanId = opts.planId;
+  if (opts.planDate !== undefined) state.premarketFormDate = opts.planDate;
   render();
 }
 
@@ -210,22 +250,26 @@ function calcStats(trades) {
   const grossLoss = losses.reduce((s, t) => s + t.dollarAmount, 0);
   const profitFactor = grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0;
   const potentialR = missed.reduce((s, t) => s + (t.realizedR || 0), 0);
-  return { wins: wins.length, losses: losses.length, missed: missed.length, total: executed.length, totalPnl, winRate, avgWin, avgLoss, avgR, profitFactor, potentialR };
+  const withDuration = executed.filter(t => t.duration);
+  const avgDuration = withDuration.length ? Math.round(withDuration.reduce((s, t) => s + t.duration, 0) / withDuration.length) : null;
+  return { wins: wins.length, losses: losses.length, missed: missed.length, total: executed.length, totalPnl, winRate, avgWin, avgLoss, avgR, profitFactor, potentialR, avgDuration };
 }
 
 function calcSetupStats(trades) {
   const map = {};
   trades.forEach(t => {
-    if (!map[t.setup]) map[t.setup] = { wins: 0, losses: 0, totalPnl: 0, count: 0 };
+    if (!map[t.setup]) map[t.setup] = { wins: 0, losses: 0, totalPnl: 0, count: 0, totalDuration: 0, durationCount: 0 };
     const s = map[t.setup];
     s.count++;
     if (t.outcome === 'Win') { s.wins++; s.totalPnl += t.dollarAmount; }
-    else { s.losses++; s.totalPnl -= t.dollarAmount; }
+    else if (t.outcome === 'Loss') { s.losses++; s.totalPnl -= t.dollarAmount; }
+    if (t.duration) { s.totalDuration += t.duration; s.durationCount++; }
   });
   return Object.entries(map).map(([setup, s]) => ({
     setup, ...s,
     winRate: (s.wins / s.count) * 100,
     avgPnl: s.totalPnl / s.count,
+    avgDuration: s.durationCount ? Math.round(s.totalDuration / s.durationCount) : null,
   })).sort((a, b) => b.count - a.count);
 }
 
@@ -239,6 +283,20 @@ function calcReasonStats(trades, outcome) {
   return Object.entries(counts)
     .map(([reason, count]) => ({ reason, count, pct: total ? (count / total) * 100 : 0 }))
     .sort((a, b) => b.count - a.count);
+}
+
+function calcDuration(startTime, endTime) {
+  if (!startTime || !endTime) return null;
+  const [sh, sm] = startTime.split(':').map(Number);
+  const [eh, em] = endTime.split(':').map(Number);
+  const mins = (eh * 60 + em) - (sh * 60 + sm);
+  return mins > 0 ? mins : null;
+}
+
+function formatDuration(mins) {
+  if (!mins) return '—';
+  if (mins < 60) return mins + 'm';
+  return Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm';
 }
 
 function buildEquityCurve(trades, initialSize) {
@@ -269,6 +327,9 @@ function renderApp() {
     setups: renderSetups,
     settings: renderSettings,
     tradeDetail: renderTradeDetail,
+    premarket: renderPremarketList,
+    premarketDetail: renderPremarketDetail,
+    premarketForm: renderPremarketForm,
   };
   const sidebarHtml = `
     <div class="sidebar">
@@ -285,13 +346,33 @@ function renderApp() {
       <div class="divider" style="margin:10px 0"></div>
       <nav style="flex:1">
         ${navItem('dashboard','Dashboard','M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6')}
+        ${navItem('premarket','Premarket Plan','M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z')}
         ${navItem('newTrade','New Trade','M12 4v16m8-8H4')}
         ${navItem('history','Trade History','M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2')}
         ${navItem('statistics','Statistics','M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z')}
         ${navItem('setups','Setups','M19 11H7m12 0a2 2 0 110 4m0-4a2 2 0 100-4m-12 4a2 2 0 110 4m0-4a2 2 0 100-4m0 4h.01M7 15a2 2 0 110-4m0 0h12')}
         ${navItem('settings','Settings','M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z')}
       </nav>
-      <div style="padding:16px;font-size:11px;color:#334155">Trade Journal v1.0</div>
+      <div style="padding:20px 16px 24px;display:flex;flex-direction:column;align-items:center;gap:6px">
+        <svg width="52" height="38" viewBox="0 0 52 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- subtle fill under curve -->
+          <path d="M2 34 C8 34 10 26 16 22 C22 18 24 14 30 10 C36 6 40 4 50 2 L50 38 L2 38 Z" fill="#10b981" fill-opacity="0.08"/>
+          <!-- chart grid lines -->
+          <line x1="2" y1="34" x2="50" y2="34" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="2" y1="24" x2="50" y2="24" stroke="#1e293b" stroke-width="0.5"/>
+          <line x1="2" y1="14" x2="50" y2="14" stroke="#1e293b" stroke-width="0.5"/>
+          <!-- upward curving stock line -->
+          <path d="M2 34 C8 34 10 26 16 22 C22 18 24 14 30 10 C36 6 40 4 50 2" stroke="#10b981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <!-- data point dots -->
+          <circle cx="2" cy="34" r="2" fill="#10b981"/>
+          <circle cx="16" cy="22" r="2" fill="#10b981"/>
+          <circle cx="30" cy="10" r="2" fill="#10b981"/>
+          <!-- arrowhead at end of line -->
+          <polygon points="50,2 44,0.5 45.5,6" fill="#10b981"/>
+        </svg>
+        <div style="font-size:15px;font-weight:800;color:#10b981;letter-spacing:0.5px;line-height:1">Uptrendy</div>
+        <div style="font-size:9px;font-weight:600;color:#334155;letter-spacing:2px;text-transform:uppercase">Trade Journal</div>
+      </div>
     </div>`;
   const content = (viewMap[state.view] || renderDashboard)();
   document.getElementById('app').innerHTML = sidebarHtml + `<div class="main">${content}</div>`;
@@ -320,9 +401,32 @@ function renderDashboard() {
   const changePct = initialSize ? (change / initialSize) * 100 : 0;
 
   const recentTrades = [...trades].sort((a,b) => new Date(b.date)-new Date(a.date)).slice(0,8);
+  const plan = todayPlan();
+  const biasColors = { Bullish:'#10b981', Bearish:'#ef4444', SnD:'#f59e0b', None:'#64748b' };
+  const outcomeColors = { 'Followed':'#10b981', "Didn't Follow":'#ef4444', 'Adapted':'#3b82f6' };
 
   return `
   <div style="padding:28px">
+    ${plan ? `
+    <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:12px 18px;margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <svg width="18" height="18" fill="none" stroke="#10b981" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <div>
+          <span style="font-size:13px;font-weight:700;color:#10b981">Today's Plan Ready</span>
+          ${plan.bias ? `<span style="margin-left:10px;font-size:12px;font-weight:700;color:${biasColors[plan.bias]||'#94a3b8'}">${plan.bias}</span>` : ''}
+          ${plan.planOutcome ? `<span style="margin-left:8px;font-size:12px;font-weight:700;color:${outcomeColors[plan.planOutcome]||'#94a3b8'}">· ${plan.planOutcome}</span>` : ''}
+          ${plan.dailyRiskLimit ? `<span style="margin-left:8px;font-size:12px;color:#64748b">Max risk: $${plan.dailyRiskLimit}</span>` : ''}
+        </div>
+      </div>
+      <button class="btn-secondary btn-sm" onclick="navigate('premarketDetail',{planId:'${plan.id}'})">View Plan</button>
+    </div>` : `
+    <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.25);border-radius:10px;padding:12px 18px;margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg width="18" height="18" fill="none" stroke="#f59e0b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+        <span style="font-size:13px;font-weight:600;color:#f59e0b">No premarket plan for today — trade with a plan, not on impulse.</span>
+      </div>
+      <button class="btn-primary btn-sm" onclick="navigate('premarketForm',{planDate:'${todayStr()}'})">Plan Today's Session</button>
+    </div>`}
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
       <div>
         <h1 style="font-size:22px;font-weight:700;margin:0">Dashboard</h1>
@@ -337,11 +441,12 @@ function renderDashboard() {
       ${statCard('Win Rate', stats ? fmtPct(stats.winRate) : '—', null, '#10b981')}
       ${statCard('Profit Factor', stats ? (isFinite(stats.profitFactor) ? stats.profitFactor.toFixed(2) : '∞') : '—', null, '#f59e0b')}
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:24px">
       ${statCard('Total Trades', stats ? stats.total : 0, null, '#8b5cf6')}
       ${statCard('Avg Win', stats && stats.wins > 0 ? fmt$(stats.avgWin) : '—', null, '#10b981')}
       ${statCard('Avg Loss', stats && stats.losses > 0 ? '-$'+Math.abs(stats.avgLoss).toFixed(2) : '—', null, '#ef4444')}
       ${statCard('Missed Trades', stats ? stats.missed : 0, null, '#f59e0b')}
+      ${statCard('Avg Duration', stats && stats.avgDuration ? formatDuration(stats.avgDuration) : '—', null, '#06b6d4')}
     </div>
 
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;margin-bottom:24px">
@@ -443,7 +548,7 @@ function renderNewTrade() {
   const t = isEdit ? state.trades.find(x => x.id === state.editTradeId) : null;
   const d = !isEdit ? (state.draftTrade || {}) : {};
   const v = (field, def = '') => isEdit ? (t?.[field] ?? def) : (d[field] ?? def);
-  const setups = j.setups || DEFAULT_SETUPS;
+  const setups = state.personalization.setups.length ? state.personalization.setups : DEFAULT_SETUPS;
 
   const hasDraft = !isEdit && !!state.draftTrade && Object.values(state.draftTrade).some(v => v && (Array.isArray(v) ? v.length : v !== '' && v !== '5'));
 
@@ -466,15 +571,26 @@ function renderNewTrade() {
 
       <!-- TRADE ANALYSIS -->
       <div class="card" style="margin-bottom:16px">
-        <div style="font-size:13px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Trade Analysis</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+        <div style="font-size:15px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Trade Analysis</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-bottom:14px">
           <div>
             <label class="label">Date</label>
             <input type="date" name="date" class="form-input" value="${v('date', new Date().toISOString().slice(0,10))}" oninput="saveDraft()" required>
           </div>
           <div>
-            <label class="label">Time</label>
-            <input type="time" name="tradeTime" class="form-input" value="${v('tradeTime')}" oninput="saveDraft()">
+            <label class="label">Entry Time</label>
+            <input type="time" name="tradeTime" class="form-input" value="${v('tradeTime')}" oninput="updateDurationDisplay();saveDraft()">
+          </div>
+          <div>
+            <label class="label">Exit Time</label>
+            <input type="time" name="endTime" class="form-input" value="${v('endTime')}" oninput="updateDurationDisplay();saveDraft()">
+          </div>
+          <div>
+            <label class="label">Duration <span style="color:#64748b;text-transform:none;font-weight:400">(auto)</span></label>
+            <div class="form-input" id="durationDisplay" style="color:#f59e0b;font-weight:600;background:#0a0f1e">
+              ${(() => { const d = calcDuration(v('tradeTime'), v('endTime')); return d ? formatDuration(d) : '—'; })()}
+            </div>
+            <input type="hidden" name="duration" id="durationInput" value="${v('duration')}">
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
@@ -518,11 +634,16 @@ function renderNewTrade() {
         <div id="missedFields" style="display:${v('outcome')==='Missed'?'block':'none'}">
           <div style="margin-bottom:14px">
             <label class="label">Hypothetical Outcome</label>
-            <select name="hypotheticalOutcome" class="form-select" onchange="saveDraft()" style="max-width:260px">
+            <select name="hypotheticalOutcome" class="form-select" onchange="updateHypotheticalReasons(this.value,[]); saveDraft()" style="max-width:260px">
               <option value="">Unknown</option>
               <option value="Win" ${v('hypotheticalOutcome')==='Win'?'selected':''}>Would have been a Win</option>
               <option value="Loss" ${v('hypotheticalOutcome')==='Loss'?'selected':''}>Would have been a Loss</option>
             </select>
+          </div>
+          <div id="hypotheticalReasonsSection" style="display:${v('hypotheticalOutcome')?'block':'none'};margin-bottom:14px">
+            <label class="label">Hypothetical Outcome Reason <span style="color:#64748b;text-transform:none;font-weight:400">(select all that apply)</span></label>
+            <div id="hypotheticalReasons" class="checkbox-group">
+            </div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
@@ -543,7 +664,7 @@ function renderNewTrade() {
             <label class="label">Entry Type</label>
             <select name="entryType" class="form-select" onchange="saveDraft()">
               <option value="">Select...</option>
-              ${(currentJournal().entryTypes || DEFAULT_ENTRY_TYPES).map(e => `<option value="${escHtml(e)}" ${v('entryType')===e?'selected':''}>${escHtml(e)}</option>`).join('')}
+              ${(state.personalization.entryTypes.length ? state.personalization.entryTypes : DEFAULT_ENTRY_TYPES).map(e => `<option value="${escHtml(e)}" ${v('entryType')===e?'selected':''}>${escHtml(e)}</option>`).join('')}
             </select>
           </div>
           <div>
@@ -554,7 +675,7 @@ function renderNewTrade() {
         <div style="margin-bottom:14px">
           <label class="label">Entry Trigger <span style="color:#64748b;text-transform:none;font-weight:400">(select all that apply)</span></label>
           <div id="entryTriggers" class="checkbox-group">
-            ${(currentJournal().entryTriggers || DEFAULT_ENTRY_TRIGGERS).map(tr => `
+            ${(state.personalization.entryTriggers.length ? state.personalization.entryTriggers : DEFAULT_ENTRY_TRIGGERS).map(tr => `
               <div class="checkbox-pill${(v('entryTriggers',[])).includes(tr)?' checked':''}" onclick="togglePill(this)" data-value="${escHtml(tr)}" data-group="trigger">
                 ${escHtml(tr)}
               </div>`).join('')}
@@ -574,7 +695,14 @@ function renderNewTrade() {
 
       <!-- CONTEXT -->
       <div class="card" style="margin-bottom:16px">
-        <div style="font-size:13px;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Context</div>
+        <div style="font-size:15px;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Context</div>
+        <div style="margin-bottom:14px">
+          <label class="label">Premarket Plan</label>
+          <select name="premarketPlanId" class="form-select" onchange="saveDraft()">
+            <option value="">None</option>
+            ${journalPlans().sort((a,b)=>b.date.localeCompare(a.date)).map(p=>`<option value="${p.id}" ${v('premarketPlanId')===p.id?'selected':''}>${p.date}${p.bias?' — '+p.bias:''}</option>`).join('')}
+          </select>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
           <div>
             <label class="label">Daily Bias</label>
@@ -582,6 +710,7 @@ function renderNewTrade() {
               <option value="">Select...</option>
               <option value="Bullish" ${v('dailyBias')==='Bullish'?'selected':''}>Bullish</option>
               <option value="Bearish" ${v('dailyBias')==='Bearish'?'selected':''}>Bearish</option>
+              <option value="No Bias" ${v('dailyBias')==='No Bias'?'selected':''}>No Bias</option>
             </select>
           </div>
           <div>
@@ -605,7 +734,7 @@ function renderNewTrade() {
 
       <!-- EXECUTIONS -->
       <div class="card" style="margin-bottom:16px">
-        <div style="font-size:13px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Executions</div>
+        <div style="font-size:15px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Executions</div>
         <div id="executionImages" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px"></div>
         <div class="image-upload-area" onclick="document.getElementById('execUpload').click()">
           <svg width="24" height="24" fill="none" stroke="#64748b" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 6px"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
@@ -616,7 +745,7 @@ function renderNewTrade() {
 
       <!-- HTF VIEW -->
       <div class="card" style="margin-bottom:16px">
-        <div style="font-size:13px;font-weight:700;color:#06b6d4;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">HTF View</div>
+        <div style="font-size:15px;font-weight:700;color:#06b6d4;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">HTF View</div>
         <div id="htfImages" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px"></div>
         <div class="image-upload-area" onclick="document.getElementById('htfUpload').click()">
           <svg width="24" height="24" fill="none" stroke="#64748b" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 6px"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
@@ -627,7 +756,7 @@ function renderNewTrade() {
 
       <!-- EMOTIONS -->
       <div class="card" style="margin-bottom:24px">
-        <div style="font-size:13px;font-weight:700;color:#ec4899;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Emotions & Notes</div>
+        <div style="font-size:15px;font-weight:700;color:#ec4899;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Emotions & Notes</div>
         <label class="label">How were you feeling? What was your mindset?</label>
         <textarea name="emotions" class="form-input" rows="4" placeholder="Describe your emotional state, any hesitations, confidence level..." style="resize:vertical" oninput="saveDraft()">${escHtml(v('emotions'))}</textarea>
       </div>
@@ -662,7 +791,7 @@ function applyHistoryFilters(trades) {
 
 function renderHistory() {
   const j = currentJournal();
-  const setups = j.setups || DEFAULT_SETUPS;
+  const setups = state.personalization.setups.length ? state.personalization.setups : DEFAULT_SETUPS;
   const allTrades = journalTrades();
   let trades = applyHistoryFilters([...allTrades]).sort((a,b) => {
     const d = new Date(b.date) - new Date(a.date);
@@ -813,7 +942,8 @@ async function renderTradeDetailAsync(tradeId) {
       </div>
       <div class="stat-card">
         <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">Time</div>
-        <div style="font-size:18px;font-weight:700;color:#e2e8f0">${t.tradeTime ? formatTime(t.tradeTime) : '—'}</div>
+        <div style="font-size:16px;font-weight:700;color:#e2e8f0">${t.tradeTime ? formatTime(t.tradeTime) : '—'}${t.endTime ? ' → ' + formatTime(t.endTime) : ''}</div>
+        ${t.duration ? `<div style="font-size:12px;color:#06b6d4;margin-top:2px">${formatDuration(t.duration)}</div>` : ''}
       </div>
       <div class="stat-card">
         <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">Confidence</div>
@@ -829,10 +959,13 @@ async function renderTradeDetailAsync(tradeId) {
         ${detailRow('Entry Type', escHtml(t.entryType||'—'))}
         ${detailRow('Entry Triggers', (t.entryTriggers||[]).map(r=>`<span class="tag">${escHtml(r)}</span>`).join(' ')||'—')}
         ${detailRow('Outcome Reasons', (t.outcomeReasons||[]).map(r=>`<span class="tag">${escHtml(r)}</span>`).join(' ')||'—')}
+        ${t.outcome==='Missed' && t.hypotheticalOutcome ? detailRow('Hypothetical Outcome', `<span class="${outcomeBadge(t.hypotheticalOutcome)}">${t.hypotheticalOutcome==='Win'?'Would have been a Win':'Would have been a Loss'}</span>`) : ''}
+        ${t.outcome==='Missed' && (t.hypotheticalOutcomeReasons||[]).length ? detailRow('Hypothetical Reasons', (t.hypotheticalOutcomeReasons||[]).map(r=>`<span class="tag">${escHtml(r)}</span>`).join(' ')) : ''}
       </div>
       <div class="card">
         <div style="font-size:13px;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Context</div>
-        ${detailRow('Daily Bias', `<span style="color:${t.dailyBias==='Bullish'?'#10b981':'#ef4444'};font-weight:600">${t.dailyBias||'—'}</span>`)}
+        ${t.premarketPlanId ? (() => { const lp = state.plans.find(p=>p.id===t.premarketPlanId); return lp ? detailRow('Premarket Plan', `<button class="btn-secondary btn-sm" onclick="navigate('premarketDetail',{planId:'${lp.id}'})" style="font-size:12px">${lp.date}${lp.bias?' — '+lp.bias:''}</button>`) : ''; })() : ''}
+        ${detailRow('Daily Bias', `<span style="color:${t.dailyBias==='Bullish'?'#10b981':t.dailyBias==='No Bias'?'#64748b':'#ef4444'};font-weight:600">${t.dailyBias||'—'}</span>`)}
         ${detailRow('HTF PD Array', t.htfPdArray||'—')}
         ${detailRow('Market Env', t.marketEnvironment||'—')}
       </div>
@@ -896,6 +1029,336 @@ function previewImage(src) {
 }
 
 // ============================================================
+//  PREMARKET PLAN
+// ============================================================
+const BIAS_COLORS = { Bullish:'#10b981', Bearish:'#ef4444', SnD:'#f59e0b', None:'#64748b' };
+const OUTCOME_COLORS = { 'Followed':'#10b981', "Didn't Follow":'#ef4444', 'Adapted':'#3b82f6' };
+
+function planDayStats(plan) {
+  const linked = journalTrades().filter(t => t.premarketPlanId === plan.id);
+  const executed = linked.filter(t => t.outcome !== 'Missed');
+  const pnl = executed.reduce((s, t) => s + (t.outcome === 'Win' ? t.dollarAmount : -t.dollarAmount), 0);
+  return { linked, executed, pnl };
+}
+
+// ---- LIST VIEW ----
+function renderPremarketList() {
+  const plans = journalPlans().sort((a, b) => b.date.localeCompare(a.date));
+
+  // Month filter
+  const months = [...new Set(plans.map(p => p.date.slice(0, 7)))].sort((a, b) => b.localeCompare(a));
+  const activeMonth = state.premarketListMonth;
+  const filtered = activeMonth ? plans.filter(p => p.date.startsWith(activeMonth)) : plans;
+
+  // EST trading window check
+  const estNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const estHour = estNow.getHours();
+  const inWindow = estHour >= 5 && estHour < 22;
+  const hasTodayPlan = !!todayPlan();
+  const showNewBtn = inWindow && !hasTodayPlan;
+
+  return `
+  <div style="padding:28px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+      <h1 style="font-size:22px;font-weight:700;margin:0">Premarket Plans</h1>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        ${showNewBtn ? `
+          <button class="btn-primary" onclick="navigate('premarketForm',{planDate:'${todayStr()}'})">+ New Premarket Plan</button>
+        ` : ''}
+        <button class="btn-secondary btn-sm" onclick="showDatePickerModal()">Create for date...</button>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+      <select class="form-select" style="max-width:180px" onchange="state.premarketListMonth=this.value;navigate('premarket')">
+        <option value="">All months</option>
+        ${months.map(m => `<option value="${m}" ${activeMonth===m?'selected':''}>${m}</option>`).join('')}
+      </select>
+      <span style="font-size:13px;color:#64748b">${filtered.length} plan${filtered.length!==1?'s':''}</span>
+    </div>
+
+    ${filtered.length ? `
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr>
+          <th>Date</th><th>Bias</th><th>Pledge</th><th>Outcome</th><th>Trades</th><th>Day P&L</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${filtered.map(p => {
+            const { linked, pnl } = planDayStats(p);
+            const isToday = p.date === todayStr();
+            return `<tr onclick="navigate('premarketDetail',{planId:'${p.id}'})" style="cursor:pointer">
+              <td>
+                <span style="font-weight:600">${p.date}</span>
+                ${isToday ? '<span style="margin-left:8px;font-size:11px;background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);border-radius:4px;padding:1px 6px">TODAY</span>' : ''}
+              </td>
+              <td>${p.bias ? `<span style="font-weight:700;color:${BIAS_COLORS[p.bias]||'#94a3b8'}">${p.bias}</span>` : '<span style="color:#334155">—</span>'}</td>
+              <td>${p.pledgeSigned ? '<span style="color:#10b981;font-size:16px">✓</span>' : '<span style="color:#334155">—</span>'}</td>
+              <td>${p.planOutcome ? `<span style="font-size:12px;font-weight:700;color:${OUTCOME_COLORS[p.planOutcome]||'#94a3b8'}">${p.planOutcome}</span>` : '<span style="color:#334155">—</span>'}</td>
+              <td style="color:#94a3b8">${linked.length || '—'}</td>
+              <td style="font-weight:600;color:${pnl>0?'#10b981':pnl<0?'#ef4444':'#64748b'}">${linked.length ? fmt$(pnl) : '—'}</td>
+              <td><span style="color:#3b82f6;font-size:13px">View →</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>` : `
+    <div style="text-align:center;padding:60px;color:#64748b">
+      <div style="font-size:40px;margin-bottom:12px">📋</div>
+      <div style="font-size:16px;font-weight:600;margin-bottom:6px">No plans yet</div>
+      <div style="font-size:13px">Start planning your sessions before the market opens.</div>
+      ${showNewBtn ? `<button class="btn-primary" style="margin-top:16px" onclick="navigate('premarketForm',{planDate:'${todayStr()}'})">+ New Premarket Plan</button>` : ''}
+    </div>`}
+  </div>`;
+}
+
+// ---- DETAIL VIEW (read-only) ----
+function renderPremarketDetail() {
+  const plan = state.plans.find(p => p.id === state.selectedPlanId);
+  if (!plan) return `<div style="padding:28px;color:#64748b">Plan not found.</div>`;
+
+  const biasReasons = plan.biasReasons || [];
+  const planComplete = plan.pledgeSigned;
+  const isToday = plan.date === todayStr();
+  const { linked, pnl } = planDayStats(plan);
+  const wins = linked.filter(t => t.outcome === 'Win').length;
+  const losses = linked.filter(t => t.outcome === 'Loss').length;
+  const missed = linked.filter(t => t.outcome === 'Missed').length;
+
+  return `
+  <div style="padding:28px;max-width:860px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap">
+      <button class="btn-secondary btn-sm" onclick="navigate('premarket')">← Plans</button>
+      <h1 style="font-size:22px;font-weight:700;margin:0;flex:1">
+        Plan — ${plan.date}
+        ${isToday ? '<span style="margin-left:10px;font-size:13px;background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);border-radius:4px;padding:2px 8px">TODAY</span>' : ''}
+      </h1>
+      <button class="btn-secondary btn-sm" onclick="navigate('premarketForm',{planId:'${plan.id}'})">Edit Plan</button>
+    </div>
+
+    <!-- Summary row -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px">
+      <div class="stat-card">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">Bias</div>
+        <div style="font-size:18px;font-weight:700;color:${BIAS_COLORS[plan.bias]||'#94a3b8'}">${plan.bias||'—'}</div>
+      </div>
+      <div class="stat-card">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">Day P&L</div>
+        <div style="font-size:18px;font-weight:700;color:${pnl>0?'#10b981':pnl<0?'#ef4444':'#64748b'}">${linked.length ? fmt$(pnl) : '—'}</div>
+      </div>
+      <div class="stat-card">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">Trades</div>
+        <div style="font-size:18px;font-weight:700;color:#e2e8f0">${linked.length || '—'}</div>
+        ${linked.length ? `<div style="font-size:11px;color:#64748b;margin-top:2px"><span style="color:#10b981">${wins}W</span> · <span style="color:#ef4444">${losses}L</span>${missed?` · <span style="color:#f59e0b">${missed}M</span>`:''}</div>` : ''}
+      </div>
+      <div class="stat-card">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">Plan Outcome</div>
+        <div style="font-size:15px;font-weight:700;color:${OUTCOME_COLORS[plan.planOutcome]||'#64748b'}">${plan.planOutcome||'—'}</div>
+      </div>
+      <div class="stat-card">
+        <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:600;margin-bottom:4px">Pledge</div>
+        <div style="font-size:18px;font-weight:700;color:${planComplete?'#10b981':'#64748b'}">${planComplete?'✓ Signed':'—'}</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Market Bias</div>
+        ${plan.bias ? detailRow('Bias', `<span style="font-weight:700;color:${BIAS_COLORS[plan.bias]}">${plan.bias}</span>`) : ''}
+        ${plan.dailyRiskLimit ? detailRow('Daily Risk Limit', `<span style="color:#f59e0b;font-weight:600">$${plan.dailyRiskLimit}</span>`) : ''}
+        ${biasReasons.length ? detailRow('Bias Reasons', biasReasons.map(r=>`<span class="tag">${escHtml(r)}</span>`).join(' ')) : ''}
+      </div>
+      <div class="card">
+        <div style="font-size:13px;font-weight:700;color:#ec4899;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Pre-Session Emotions</div>
+        <div style="font-size:14px;color:#94a3b8;line-height:1.6;white-space:pre-wrap">${escHtml(plan.emotions||'—')}</div>
+      </div>
+    </div>
+
+    ${plan.keyLevels ? `
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Key Levels</div>
+      <pre style="font-family:monospace;font-size:13px;color:#94a3b8;line-height:1.7;margin:0;white-space:pre-wrap">${escHtml(plan.keyLevels)}</pre>
+    </div>` : ''}
+
+    ${plan.analysis ? `
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;color:#06b6d4;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Analysis</div>
+      <div style="font-size:14px;color:#94a3b8;line-height:1.7;white-space:pre-wrap">${escHtml(plan.analysis)}</div>
+    </div>` : ''}
+
+    <div id="planDetailImages" style="margin-bottom:16px"></div>
+
+    ${plan.intradayCommentary || (plan.intradayImages || []).length ? `
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;color:#f97316;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Intraday Commentary</div>
+      ${plan.intradayCommentary ? `<div style="font-size:14px;color:#94a3b8;line-height:1.7;white-space:pre-wrap;margin-bottom:${(plan.intradayImages||[]).length?'14px':'0'}">${escHtml(plan.intradayCommentary)}</div>` : ''}
+      <div id="intradayDetailImages" style="display:flex;flex-wrap:wrap;gap:12px"></div>
+    </div>` : ''}
+
+    ${linked.length ? `
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Linked Trades</div>
+      <table>
+        <thead><tr><th>Ticker</th><th>Setup</th><th>Direction</th><th>Outcome</th><th>P&L</th><th>Realized R</th></tr></thead>
+        <tbody>
+          ${linked.sort((a,b)=>a.date.localeCompare(b.date)||((a.tradeTime||'').localeCompare(b.tradeTime||''))).map(t=>`
+          <tr onclick="navigate('tradeDetail',{tradeId:'${t.id}'})" style="cursor:pointer">
+            <td style="font-weight:600">${escHtml(t.ticker||'—')}</td>
+            <td><span class="tag">${escHtml(t.setup||'—')}</span></td>
+            <td><span style="color:${t.direction==='Long'?'#10b981':'#ef4444'}">${t.direction||'—'}</span></td>
+            <td><span class="${outcomeBadge(t.outcome)}">${t.outcome}</span></td>
+            <td style="color:${outcomeColor(t.outcome)};font-weight:600">${t.outcome==='Missed'?'~':t.outcome==='Win'?'+':'-'}$${Math.abs(t.dollarAmount||0).toFixed(2)}</td>
+            <td style="color:${outcomeColor(t.outcome)}">${t.outcome==='Missed'?'~':t.outcome==='Win'?'+':'-'}${(t.realizedR||0).toFixed(2)}R</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      <div style="border-top:1px solid #1e293b;margin-top:12px;padding-top:12px;display:flex;justify-content:flex-end;gap:24px">
+        <span style="font-size:13px;color:#64748b">Day Total:</span>
+        <span style="font-size:15px;font-weight:700;color:${pnl>=0?'#10b981':'#ef4444'}">${fmt$(pnl)}</span>
+      </div>
+    </div>` : ''}
+  </div>`;
+}
+
+// ---- FORM VIEW (create / edit) ----
+function renderPremarketForm() {
+  const editPlan = state.selectedPlanId ? state.plans.find(p => p.id === state.selectedPlanId) : null;
+  const defaultDate = editPlan ? editPlan.date : (state.premarketFormDate || todayStr());
+  const biasReasons = state.personalization.biasReasons.length ? state.personalization.biasReasons : DEFAULT_BIAS_REASONS;
+  const vp = (field, def = '') => editPlan ? (editPlan[field] ?? def) : def;
+  const planComplete = editPlan && editPlan.pledgeSigned;
+
+  return `
+  <div style="padding:28px;max-width:800px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap">
+      <button class="btn-secondary btn-sm" onclick="navigate('${editPlan?'premarketDetail':'premarket'}',${editPlan?`{planId:'${editPlan.id}'}`:'{}'})"}>← Back</button>
+      <div style="flex:1">
+        <h1 style="font-size:22px;font-weight:700;margin:0">${editPlan ? 'Edit Plan' : 'New Premarket Plan'}</h1>
+      </div>
+      ${planComplete ? `<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);border-radius:20px;padding:5px 14px;font-size:13px;font-weight:700;color:#10b981">✓ Pledge Signed</span>` : ''}
+    </div>
+
+    <form id="premarketForm" onsubmit="handleSavePremarket(event)">
+      <input type="hidden" name="planId" value="${editPlan ? editPlan.id : ''}">
+      <div class="card" style="margin-bottom:16px">
+        <label class="label">Plan Date</label>
+        <input type="date" name="planDate" class="form-input" value="${defaultDate}" style="max-width:200px" ${editPlan ? '' : ''}>
+      </div>
+
+      <!-- MARKET BIAS -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:15px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Market Bias</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px">
+          <div>
+            <label class="label">Bias for the Day</label>
+            <select name="bias" class="form-select">
+              <option value="">Select...</option>
+              <option value="Bullish" ${vp('bias')==='Bullish'?'selected':''}>Bullish</option>
+              <option value="Bearish" ${vp('bias')==='Bearish'?'selected':''}>Bearish</option>
+              <option value="SnD" ${vp('bias')==='SnD'?'selected':''}>Search & Destroy (SnD)</option>
+              <option value="None" ${vp('bias')==='None'?'selected':''}>No Bias</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Daily Risk Limit ($)</label>
+            <input type="number" name="dailyRiskLimit" class="form-input" placeholder="e.g. 500" step="0.01" min="0" value="${escHtml(String(vp('dailyRiskLimit','')))}" >
+          </div>
+        </div>
+        <div>
+          <label class="label">Bias Reasons <span style="color:#64748b;text-transform:none;font-weight:400">(select all that apply)</span></label>
+          <div id="biasReasonPills" class="checkbox-group">
+            ${biasReasons.length ? biasReasons.map(r => `
+              <div class="checkbox-pill${(vp('biasReasons',[])).includes(r)?' checked':''}" onclick="togglePill(this)" data-value="${escHtml(r)}">${escHtml(r)}</div>`).join('') :
+              '<div style="color:#64748b;font-size:13px">No bias reasons configured — add them in Settings</div>'}
+          </div>
+        </div>
+      </div>
+
+      <!-- KEY LEVELS -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:15px;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Key Levels</div>
+        <label class="label">Price levels to watch (liquidity pools, PD arrays, S/R...)</label>
+        <textarea name="keyLevels" class="form-input" rows="5" placeholder="e.g.&#10;NQ 19,850 — liquidity pool above&#10;NQ 19,650 — HTF OTE zone&#10;NQ 19,500 — daily support" style="resize:vertical;font-family:monospace;font-size:13px">${escHtml(vp('keyLevels'))}</textarea>
+      </div>
+
+      <!-- ANALYSIS -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:15px;font-weight:700;color:#06b6d4;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Analysis</div>
+        <label class="label">Market read — what are you looking for today?</label>
+        <textarea name="analysis" class="form-input" rows="5" placeholder="Describe your read on the market, the setups you're hunting, and the conditions that need to be met before you take a trade..." style="resize:vertical">${escHtml(vp('analysis'))}</textarea>
+      </div>
+
+      <!-- CHART IMAGES -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:15px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Chart Screenshots</div>
+        <div id="planImages" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px"></div>
+        <div class="image-upload-area" onclick="document.getElementById('planUpload').click()">
+          <svg width="24" height="24" fill="none" stroke="#64748b" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 6px"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          <div style="font-size:13px;color:#64748b">Click to upload chart images</div>
+        </div>
+        <input type="file" id="planUpload" accept="image/*" multiple style="display:none" onchange="handleImageUpload(this,'plan')">
+      </div>
+
+      <!-- INTRADAY COMMENTARY -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:15px;font-weight:700;color:#f97316;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Intraday Commentary</div>
+        <label class="label">What's happening during the session?</label>
+        <textarea name="intradayCommentary" class="form-input" rows="5" placeholder="Price action notes, market structure changes, reactions to levels, anything relevant as the session unfolds..." style="resize:vertical;margin-bottom:14px">${escHtml(vp('intradayCommentary'))}</textarea>
+        <label class="label" style="margin-top:4px">Intraday Screenshots</label>
+        <div id="intradayImages" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px"></div>
+        <div class="image-upload-area" onclick="document.getElementById('intradayUpload').click()">
+          <svg width="24" height="24" fill="none" stroke="#64748b" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 6px"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+          <div style="font-size:13px;color:#64748b">Click to upload intraday screenshots</div>
+        </div>
+        <input type="file" id="intradayUpload" accept="image/*" multiple style="display:none" onchange="handleImageUpload(this,'intraday')">
+      </div>
+
+      <!-- EMOTIONS -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:15px;font-weight:700;color:#ec4899;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Pre-Session Emotions</div>
+        <label class="label">How are you feeling going into today's session?</label>
+        <textarea name="emotions" class="form-input" rows="3" placeholder="Describe your mental state, energy level, confidence, any distractions..." style="resize:vertical">${escHtml(vp('emotions'))}</textarea>
+      </div>
+
+      <!-- PLAN OUTCOME -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:15px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Plan Outcome</div>
+        <label class="label" style="margin-bottom:10px">How did today go against your plan?</label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          ${[["Followed","sel-followed"],["Didn't Follow","sel-didnt"],["Adapted","sel-adapted"]].map(([o,cls]) =>
+            `<div class="plan-outcome-opt${vp('planOutcome')===o?' '+cls:''}" data-value="${escHtml(o)}" data-cls="${cls}" onclick="selectPlanOutcome(this)">${escHtml(o)}</div>`
+          ).join('')}
+        </div>
+        <input type="hidden" name="planOutcome" id="planOutcomeInput" value="${escHtml(vp('planOutcome'))}">
+      </div>
+
+      <!-- TRADER'S PLEDGE -->
+      <div class="card" style="margin-bottom:24px;border:1px solid ${planComplete?'rgba(16,185,129,0.4)':'#334155'}">
+        <div style="font-size:15px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Trader's Pledge</div>
+        <div style="background:#0a0f1e;border-radius:8px;padding:18px 20px;margin-bottom:18px;border-left:3px solid #10b981;line-height:1.8;color:#94a3b8;font-size:14px;font-style:italic">
+          "Today I pledge to trade professionally and accept the outcome, whichever it is.<br>
+          I will only take trades that align with my plan and my rules.<br>
+          I will respect my risk parameters and protect my capital above all else.<br>
+          I will not revenge trade, overtrade, or let emotions dictate my decisions.<br>
+          I will not chase entries or move my stop out of fear.<br>
+          If I feel off, anxious, or distracted — I will step away.<br>
+          My job today is to execute my plan, nothing more."
+        </div>
+        <label style="display:flex;align-items:center;gap:12px;cursor:pointer;padding:10px 14px;border-radius:8px;border:1px solid ${planComplete?'rgba(16,185,129,0.3)':'#334155'};background:${planComplete?'rgba(16,185,129,0.06)':'transparent'}">
+          <input type="checkbox" name="pledgeSigned" ${vp('pledgeSigned')?'checked':''} style="width:20px;height:20px;accent-color:#10b981;cursor:pointer;flex-shrink:0">
+          <span style="font-size:14px;font-weight:600;color:${planComplete?'#10b981':'#e2e8f0'}">I have read and I accept this pledge for this session</span>
+        </label>
+      </div>
+
+      <div style="display:flex;gap:12px">
+        <button type="submit" class="btn-primary" style="padding:11px 28px;font-size:15px">${editPlan ? 'Update Plan' : 'Save Plan'}</button>
+        <button type="button" class="btn-secondary" onclick="navigate('${editPlan?'premarketDetail':'premarket'}',${editPlan?`{planId:'${editPlan.id}'}`:'{}'})"}>Cancel</button>
+      </div>
+    </form>
+  </div>`;
+}
+
+// ============================================================
 //  STATISTICS
 // ============================================================
 function renderStatistics() {
@@ -919,7 +1382,7 @@ function renderStatistics() {
       ${setupStats.length ? `
       <table>
         <thead><tr>
-          <th>Setup</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win Rate</th><th>Total P&L</th><th>Avg P&L</th>
+          <th>Setup</th><th>Trades</th><th>Wins</th><th>Losses</th><th>Win Rate</th><th>Total P&L</th><th>Avg P&L</th><th>Avg Duration</th>
         </tr></thead>
         <tbody>
           ${setupStats.map(s => `
@@ -936,6 +1399,7 @@ function renderStatistics() {
             </td>
             <td style="color:${s.totalPnl>=0?'#10b981':'#ef4444'};font-weight:600">${fmt$(s.totalPnl)}</td>
             <td style="color:${s.avgPnl>=0?'#10b981':'#ef4444'}">${fmt$(s.avgPnl)}</td>
+            <td style="color:#06b6d4">${s.avgDuration ? formatDuration(s.avgDuration) : '—'}</td>
           </tr>`).join('')}
         </tbody>
       </table>
@@ -1006,12 +1470,14 @@ function renderStatCharts(trades) {
 // ============================================================
 function renderSettings() {
   const j = currentJournal();
-  const setups = j.setups || DEFAULT_SETUPS;
-  const winReasons = j.winReasons || WIN_REASONS;
-  const lossReasons = j.lossReasons || LOSS_REASONS;
-  const entryTypes = j.entryTypes || [];
-  const entryTriggers = j.entryTriggers || [];
-  const missedReasons = j.missedReasons || DEFAULT_MISSED_REASONS;
+  const pers = state.personalization;
+  const setups = pers.setups.length ? pers.setups : DEFAULT_SETUPS;
+  const winReasons = pers.winReasons.length ? pers.winReasons : WIN_REASONS;
+  const lossReasons = pers.lossReasons.length ? pers.lossReasons : LOSS_REASONS;
+  const entryTypes = pers.entryTypes.length ? pers.entryTypes : DEFAULT_ENTRY_TYPES;
+  const entryTriggers = pers.entryTriggers.length ? pers.entryTriggers : DEFAULT_ENTRY_TRIGGERS;
+  const missedReasons = pers.missedReasons.length ? pers.missedReasons : DEFAULT_MISSED_REASONS;
+  const biasReasons = pers.biasReasons.length ? pers.biasReasons : DEFAULT_BIAS_REASONS;
 
   function reasonRows(reasons, cls) {
     return reasons.map((r, i) => `
@@ -1022,8 +1488,15 @@ function renderSettings() {
   }
 
   return `
-  <div style="padding:28px;max-width:600px">
-    <h1 style="font-size:22px;font-weight:700;margin:0 0 24px">Settings</h1>
+  <div style="padding:28px;max-width:640px">
+    <h1 style="font-size:22px;font-weight:700;margin:0 0 20px">Settings</h1>
+
+    <div style="border-bottom:1px solid #1e293b;margin-bottom:24px">
+      <button class="tab-btn ${state.settingsTab==='journal'?'active':''}" onclick="state.settingsTab='journal';navigate('settings')">Journal</button>
+      <button class="tab-btn ${state.settingsTab==='personalization'?'active':''}" onclick="state.settingsTab='personalization';navigate('settings')">Trade Personalization</button>
+    </div>
+
+    ${state.settingsTab === 'journal' ? `
     <form onsubmit="handleSaveSettings(event)">
       <div class="card" style="margin-bottom:16px">
         <div style="font-size:13px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Journal Settings</div>
@@ -1041,6 +1514,32 @@ function renderSettings() {
         </div>
         <div style="font-size:12px;color:#64748b;margin-top:6px">This is the dollar amount risked on every trade. Used to calculate Realized R.</div>
       </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Backup & Transfer</div>
+        <div style="font-size:13px;color:#64748b;margin-bottom:14px">Export all your journals, trades and plans to a file. Use this to back up your data or transfer it to another device/browser.</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <button type="button" class="btn-primary" onclick="exportJSON()">Export All Data</button>
+          <label style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:9px 18px;cursor:pointer;font-size:14px;transition:background 0.15s" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='#1e293b'">
+            Import Data
+            <input type="file" accept=".json" style="display:none" onchange="importJSON(this)">
+          </label>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:24px">
+        <div style="font-size:13px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Danger Zone</div>
+        <div style="display:flex;gap:12px">
+          <button type="button" class="btn-secondary" onclick="showJournalSelector()">Switch Journal</button>
+          <button type="button" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:9px 18px;cursor:pointer;font-size:14px" onclick="confirmDeleteJournal()">Delete This Journal</button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-primary" style="padding:11px 28px;font-size:15px">Save Settings</button>
+    </form>
+    ` : `
+    <form onsubmit="handleSavePersonalization(event)">
+      <div style="font-size:12px;color:#64748b;margin-bottom:16px">These lists are shared across all your journals — change them once and they apply everywhere.</div>
 
       <div class="card" style="margin-bottom:16px">
         <div style="font-size:13px;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Setups</div>
@@ -1102,28 +1601,17 @@ function renderSettings() {
         <button type="button" class="btn-secondary btn-sm" onclick="addReasonField('missedReasonList','missed-reason-input')">+ Add Missed Reason</button>
       </div>
 
-      <div class="card" style="margin-bottom:16px">
-        <div style="font-size:13px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px">Backup & Transfer</div>
-        <div style="font-size:13px;color:#64748b;margin-bottom:14px">Export all your journals and trades to a file. Use this to back up your data or transfer it to another device/browser.</div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap">
-          <button type="button" class="btn-primary" onclick="exportJSON()">Export All Data</button>
-          <label style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:9px 18px;cursor:pointer;font-size:14px;transition:background 0.15s" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='#1e293b'">
-            Import Data
-            <input type="file" accept=".json" style="display:none" onchange="importJSON(this)">
-          </label>
-        </div>
-      </div>
-
       <div class="card" style="margin-bottom:24px">
-        <div style="font-size:13px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Danger Zone</div>
-        <div style="display:flex;gap:12px">
-          <button type="button" class="btn-secondary" onclick="showJournalSelector()">Switch Journal</button>
-          <button type="button" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:9px 18px;cursor:pointer;font-size:14px" onclick="confirmDeleteJournal()">Delete This Journal</button>
+        <div style="font-size:13px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:14px">Premarket Bias Reasons</div>
+        <div id="biasReasonList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+          ${reasonRows(biasReasons, 'bias-reason-input')}
         </div>
+        <button type="button" class="btn-secondary btn-sm" onclick="addReasonField('biasReasonList','bias-reason-input')">+ Add Bias Reason</button>
       </div>
 
-      <button type="submit" class="btn-primary" style="padding:11px 28px;font-size:15px">Save Settings</button>
+      <button type="submit" class="btn-primary" style="padding:11px 28px;font-size:15px">Save Personalization</button>
     </form>
+    `}
   </div>`;
 }
 
@@ -1132,7 +1620,7 @@ function renderSettings() {
 // ============================================================
 
 // ---- Image temp storage (for new trade form) ----
-const pendingImages = { execution: [], htf: [] };
+const pendingImages = { execution: [], htf: [], plan: [], intraday: [] };
 
 function handleImageUpload(input, type) {
   const files = Array.from(input.files);
@@ -1150,7 +1638,8 @@ function handleImageUpload(input, type) {
 }
 
 function renderImagePreviews(type) {
-  const container = document.getElementById(type === 'execution' ? 'executionImages' : 'htfImages');
+  const idMap = { execution: 'executionImages', htf: 'htfImages', plan: 'planImages', intraday: 'intradayImages' };
+  const container = document.getElementById(idMap[type] || type + 'Images');
   if (!container) return;
   container.innerHTML = pendingImages[type].map((img, i) => `
     <div class="image-thumb">
@@ -1167,7 +1656,8 @@ function removePendingImage(type, index) {
 
 function updateOutcomeReasons(outcome, selectedReasons = []) {
   const j = currentJournal();
-  const reasons = outcome === 'Win' ? (j.winReasons || []) : outcome === 'Loss' ? (j.lossReasons || []) : outcome === 'Missed' ? (j.missedReasons || DEFAULT_MISSED_REASONS) : [];
+  const p = state.personalization;
+  const reasons = outcome === 'Win' ? (p.winReasons.length ? p.winReasons : []) : outcome === 'Loss' ? (p.lossReasons.length ? p.lossReasons : []) : outcome === 'Missed' ? (p.missedReasons.length ? p.missedReasons : DEFAULT_MISSED_REASONS) : [];
   const container = document.getElementById('outcomeReasons');
   const label = document.getElementById('outcomeReasonsLabel');
   if (!container) return;
@@ -1185,6 +1675,37 @@ function updateOutcomeReasons(outcome, selectedReasons = []) {
 function updateMissedFields(outcome) {
   const el = document.getElementById('missedFields');
   if (el) el.style.display = outcome === 'Missed' ? 'block' : 'none';
+  if (outcome !== 'Missed') {
+    const section = document.getElementById('hypotheticalReasonsSection');
+    if (section) section.style.display = 'none';
+  }
+}
+
+function updateDurationDisplay() {
+  const start = document.querySelector('[name=tradeTime]')?.value;
+  const end = document.querySelector('[name=endTime]')?.value;
+  const mins = calcDuration(start, end);
+  const display = document.getElementById('durationDisplay');
+  const input = document.getElementById('durationInput');
+  if (display) display.textContent = mins ? formatDuration(mins) : '—';
+  if (input) input.value = mins || '';
+}
+
+function updateHypotheticalReasons(outcome, selectedReasons = []) {
+  const section = document.getElementById('hypotheticalReasonsSection');
+  const container = document.getElementById('hypotheticalReasons');
+  if (!section || !container) return;
+  if (!outcome) { section.style.display = 'none'; return; }
+  const reasons = outcome === 'Win' ? state.personalization.winReasons : state.personalization.lossReasons;
+  section.style.display = 'block';
+  if (!reasons.length) {
+    container.innerHTML = '<div style="color:#64748b;font-size:13px">No reasons configured — add them in Settings</div>';
+    return;
+  }
+  container.innerHTML = reasons.map(r => `
+    <div class="checkbox-pill${selectedReasons.includes(r) ? ' checked' : ''}" onclick="togglePill(this)" data-value="${escHtml(r)}">
+      ${escHtml(r)}
+    </div>`).join('');
 }
 
 function togglePill(el) {
@@ -1207,6 +1728,8 @@ function saveDraft() {
   state.draftTrade = {
     date: form.querySelector('[name=date]')?.value || '',
     tradeTime: form.querySelector('[name=tradeTime]')?.value || '',
+    endTime: form.querySelector('[name=endTime]')?.value || '',
+    duration: parseInt(document.getElementById('durationInput')?.value) || null,
     ticker: form.querySelector('[name=ticker]')?.value || '',
     confidence: form.querySelector('[name=confidence]')?.value || '5',
     entryType: form.querySelector('[name=entryType]')?.value || '',
@@ -1221,6 +1744,9 @@ function saveDraft() {
     marketEnvironment: form.querySelector('[name=marketEnvironment]')?.value || '',
     emotions: form.querySelector('[name=emotions]')?.value || '',
     outcomeReasons: Array.from(document.querySelectorAll('#outcomeReasons .checkbox-pill.checked')).map(el => el.getAttribute('data-value')),
+    premarketPlanId: form.querySelector('[name=premarketPlanId]')?.value || null,
+    hypotheticalOutcome: form.querySelector('[name=hypotheticalOutcome]')?.value || '',
+    hypotheticalOutcomeReasons: Array.from(document.querySelectorAll('#hypotheticalReasons .checkbox-pill.checked')).map(el => el.getAttribute('data-value')),
   };
 }
 
@@ -1277,11 +1803,15 @@ async function handleSaveTrade(event) {
     journalId: state.currentJournalId,
     date: data.get('date'),
     tradeTime: data.get('tradeTime'),
+    endTime: data.get('endTime') || null,
+    duration: parseInt(data.get('duration')) || null,
     ticker: data.get('ticker'),
     confidence: parseInt(data.get('confidence')) || 5,
     entryType: data.get('entryType'),
     entryTriggers: Array.from(document.querySelectorAll('#entryTriggers .checkbox-pill.checked')).map(el => el.getAttribute('data-value')),
+    premarketPlanId: data.get('premarketPlanId') || null,
     hypotheticalOutcome: data.get('hypotheticalOutcome') || null,
+    hypotheticalOutcomeReasons: Array.from(document.querySelectorAll('#hypotheticalReasons .checkbox-pill.checked')).map(el => el.getAttribute('data-value')),
     direction: data.get('direction'),
     setup: data.get('setup'),
     outcome,
@@ -1348,29 +1878,151 @@ function handleSaveSettings(event) {
   const form = event.target;
   const journalIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
   if (journalIdx < 0) return;
-
-  const setups = Array.from(form.querySelectorAll('.setup-input')).map(i => i.value.trim()).filter(Boolean);
-  const winReasons = Array.from(form.querySelectorAll('.win-reason-input')).map(i => i.value.trim()).filter(Boolean);
-  const lossReasons = Array.from(form.querySelectorAll('.loss-reason-input')).map(i => i.value.trim()).filter(Boolean);
-  const entryTypes = Array.from(form.querySelectorAll('.entry-type-input')).map(i => i.value.trim()).filter(Boolean);
-  const entryTriggers = Array.from(form.querySelectorAll('.entry-trigger-input')).map(i => i.value.trim()).filter(Boolean);
-  const missedReasons = Array.from(form.querySelectorAll('.missed-reason-input')).map(i => i.value.trim()).filter(Boolean);
   state.journals[journalIdx].name = form.querySelector('[name=journalName]').value.trim();
   state.journals[journalIdx].accountSize = parseFloat(form.querySelector('[name=accountSize]').value) || 0;
   state.journals[journalIdx].fixedR = parseFloat(form.querySelector('[name=fixedR]').value) || 0;
-  state.journals[journalIdx].setups = setups;
-  state.journals[journalIdx].winReasons = winReasons;
-  state.journals[journalIdx].lossReasons = lossReasons;
-  state.journals[journalIdx].entryTypes = entryTypes;
-  state.journals[journalIdx].entryTriggers = entryTriggers;
-  state.journals[journalIdx].missedReasons = missedReasons;
-  // Sync setup details keys with updated setups list
-  const details = state.journals[journalIdx].setupDetails || {};
-  setups.forEach(s => { if (!details[s]) details[s] = { description: '', imageIds: [] }; });
-  state.journals[journalIdx].setupDetails = details;
   persistJournals();
   showToast('Settings saved!');
   render();
+}
+
+function handleSavePersonalization(event) {
+  event.preventDefault();
+  const form = event.target;
+  const setups = Array.from(form.querySelectorAll('.setup-input')).map(i => i.value.trim()).filter(Boolean);
+  state.personalization = {
+    setups,
+    entryTypes: Array.from(form.querySelectorAll('.entry-type-input')).map(i => i.value.trim()).filter(Boolean),
+    entryTriggers: Array.from(form.querySelectorAll('.entry-trigger-input')).map(i => i.value.trim()).filter(Boolean),
+    winReasons: Array.from(form.querySelectorAll('.win-reason-input')).map(i => i.value.trim()).filter(Boolean),
+    lossReasons: Array.from(form.querySelectorAll('.loss-reason-input')).map(i => i.value.trim()).filter(Boolean),
+    missedReasons: Array.from(form.querySelectorAll('.missed-reason-input')).map(i => i.value.trim()).filter(Boolean),
+    biasReasons: Array.from(form.querySelectorAll('.bias-reason-input')).map(i => i.value.trim()).filter(Boolean),
+  };
+  // Sync setup details keys for the current journal
+  const journalIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
+  if (journalIdx >= 0) {
+    const details = state.journals[journalIdx].setupDetails || {};
+    setups.forEach(s => { if (!details[s]) details[s] = { description: '', imageIds: [] }; });
+    state.journals[journalIdx].setupDetails = details;
+    persistJournals();
+  }
+  persistPersonalization();
+  showToast('Personalization saved!');
+  render();
+}
+
+// ============================================================
+//  PREMARKET HANDLERS
+// ============================================================
+async function handleSavePremarket(event) {
+  event.preventDefault();
+  const form = event.target;
+  const planId = form.querySelector('[name=planId]').value;
+  const planDate = form.querySelector('[name=planDate]').value || todayStr();
+  const existing = planId ? state.plans.find(p => p.id === planId) : state.plans.find(p => p.journalId === state.currentJournalId && p.date === planDate);
+
+  // Check for date conflict on new plans
+  if (!planId && existing) {
+    if (!confirm(`A plan already exists for ${planDate}. Overwrite it?`)) return;
+  }
+
+  // Save new pending images to IndexedDB
+  const allImages = existing ? [...(existing.images || [])] : [];
+  for (const img of pendingImages.plan) {
+    await ImageDB.save('plan_' + img.id, img.dataUrl);
+    allImages.push({ id: img.id, title: img.title });
+  }
+  pendingImages.plan = [];
+
+  const allIntradayImages = existing ? [...(existing.intradayImages || [])] : [];
+  for (const img of pendingImages.intraday) {
+    await ImageDB.save('intraday_' + img.id, img.dataUrl);
+    allIntradayImages.push({ id: img.id, title: img.title });
+  }
+  pendingImages.intraday = [];
+
+  const plan = {
+    id: existing ? existing.id : uid(),
+    journalId: state.currentJournalId,
+    date: planDate,
+    bias: form.querySelector('[name=bias]').value,
+    biasReasons: Array.from(document.querySelectorAll('#biasReasonPills .checkbox-pill.checked')).map(el => el.getAttribute('data-value')),
+    keyLevels: form.querySelector('[name=keyLevels]').value,
+    analysis: form.querySelector('[name=analysis]').value,
+    intradayCommentary: form.querySelector('[name=intradayCommentary]').value,
+    emotions: form.querySelector('[name=emotions]').value,
+    dailyRiskLimit: parseFloat(form.querySelector('[name=dailyRiskLimit]').value) || null,
+    planOutcome: form.querySelector('[name=planOutcome]')?.value || '',
+    pledgeSigned: form.querySelector('[name=pledgeSigned]').checked,
+    images: allImages,
+    intradayImages: allIntradayImages,
+    createdAt: existing ? existing.createdAt : new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (existing) {
+    const idx = state.plans.findIndex(p => p.id === existing.id);
+    state.plans[idx] = plan;
+  } else {
+    state.plans.push(plan);
+  }
+  persistPlans();
+  showToast(plan.pledgeSigned ? "Plan saved — pledge signed. Let's trade!" : 'Premarket plan saved!');
+  state.selectedPlanId = plan.id;
+  navigate('premarketDetail', { planId: plan.id });
+}
+
+function removePlanImage(imgId, btn) {
+  const plan = state.plans.find(p => p.id === state.selectedPlanId);
+  if (!plan) return;
+  plan.images = (plan.images || []).filter(img => img.id !== imgId);
+  ImageDB.delete('plan_' + imgId);
+  persistPlans();
+  btn.parentElement.remove();
+}
+
+function removeIntradayImage(imgId, btn) {
+  const plan = state.plans.find(p => p.id === state.selectedPlanId);
+  if (!plan) return;
+  plan.intradayImages = (plan.intradayImages || []).filter(img => img.id !== imgId);
+  ImageDB.delete('intraday_' + imgId);
+  persistPlans();
+  btn.parentElement.remove();
+}
+
+function showDatePickerModal() {
+  const existing = new Set(journalPlans().map(p => p.date));
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'datepickerModal';
+  modal.innerHTML = `
+    <div class="modal" style="width:320px">
+      <div style="font-size:16px;font-weight:700;margin-bottom:16px">Create Plan for Date</div>
+      <label class="label">Date</label>
+      <input type="date" id="planDatePicker" class="form-input" value="${todayStr()}" style="margin-bottom:16px">
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn-secondary" onclick="document.getElementById('datepickerModal').remove()">Cancel</button>
+        <button class="btn-primary" onclick="
+          const d=document.getElementById('planDatePicker').value;
+          if(!d){return;}
+          document.getElementById('datepickerModal').remove();
+          navigate('premarketForm',{planDate:d});
+        ">Continue</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+function selectPlanOutcome(el) {
+  const value = el.getAttribute('data-value');
+  const selClass = el.getAttribute('data-cls');
+  document.querySelectorAll('.plan-outcome-opt').forEach(b => {
+    b.classList.remove('sel-followed', 'sel-didnt', 'sel-adapted');
+  });
+  el.classList.add(selClass);
+  const input = document.getElementById('planOutcomeInput');
+  if (input) input.value = value;
 }
 
 function addSetupField() {
@@ -1410,8 +2062,13 @@ function confirmDeleteJournal() {
     (t.htfImages||[]).forEach(img => ImageDB.delete(img.id));
   });
   state.trades = state.trades.filter(t => t.journalId !== state.currentJournalId);
+  journalPlans().forEach(p => {
+    (p.images || []).forEach(img => ImageDB.delete('plan_' + img.id));
+  });
+  state.plans = state.plans.filter(p => p.journalId !== state.currentJournalId);
   state.journals = state.journals.filter(j => j.id !== state.currentJournalId);
   persistTrades();
+  persistPlans();
   persistJournals();
   state.currentJournalId = null;
   DB.setCurrentJournalId(null);
@@ -1424,7 +2081,9 @@ function attachListeners() {
     const t = state.trades.find(x => x.id === state.editTradeId);
     if (t && t.outcome) {
       updateOutcomeReasons(t.outcome, t.outcomeReasons || []);
+      if (t.hypotheticalOutcome) updateHypotheticalReasons(t.hypotheticalOutcome, t.hypotheticalOutcomeReasons || []);
     }
+    if (t) updateDurationDisplay();
     if (t) {
       Promise.all((t.executions||[]).map(async img => {
         const dataUrl = await ImageDB.get(img.id);
@@ -1455,6 +2114,7 @@ function attachListeners() {
     const draft = state.draftTrade;
     if (draft && draft.outcome) {
       updateOutcomeReasons(draft.outcome, draft.outcomeReasons || []);
+      if (draft.hypotheticalOutcome) updateHypotheticalReasons(draft.hypotheticalOutcome, draft.hypotheticalOutcomeReasons || []);
     }
     // Only clear pending images if there's no draft (fresh form)
     if (!draft) {
@@ -1469,6 +2129,66 @@ function attachListeners() {
   if (state.view === 'setups' && state.selectedSetup) {
     loadSetupImages(state.selectedSetup);
   }
+  if (state.view === 'premarketForm') {
+    pendingImages.plan = [];
+    pendingImages.intraday = [];
+    const editPlan = state.selectedPlanId ? state.plans.find(p => p.id === state.selectedPlanId) : null;
+    if (editPlan && (editPlan.images || []).length) {
+      Promise.all(editPlan.images.map(async img => {
+        const dataUrl = await ImageDB.get('plan_' + img.id);
+        return { ...img, dataUrl };
+      })).then(imgs => {
+        const container = document.getElementById('planImages');
+        if (container) container.innerHTML = imgs.filter(i => i.dataUrl).map(img => `
+          <div class="image-thumb">
+            <img src="${img.dataUrl}" alt="${escHtml(img.title)}" onclick="previewImage('${img.dataUrl}')" style="cursor:zoom-in">
+            <button class="remove-img" onclick="removePlanImage('${img.id}',this)">✕</button>
+            <div style="font-size:11px;color:#64748b;text-align:center;margin-top:3px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(img.title)}</div>
+          </div>`).join('');
+      });
+    }
+    if (editPlan && (editPlan.intradayImages || []).length) {
+      Promise.all(editPlan.intradayImages.map(async img => {
+        const dataUrl = await ImageDB.get('intraday_' + img.id);
+        return { ...img, dataUrl };
+      })).then(imgs => {
+        const container = document.getElementById('intradayImages');
+        if (container) container.innerHTML = imgs.filter(i => i.dataUrl).map(img => `
+          <div class="image-thumb">
+            <img src="${img.dataUrl}" alt="${escHtml(img.title)}" onclick="previewImage('${img.dataUrl}')" style="cursor:zoom-in">
+            <button class="remove-img" onclick="removeIntradayImage('${img.id}',this)">✕</button>
+            <div style="font-size:11px;color:#64748b;text-align:center;margin-top:3px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(img.title)}</div>
+          </div>`).join('');
+      });
+    }
+  }
+  if (state.view === 'premarketDetail') {
+    const plan = state.plans.find(p => p.id === state.selectedPlanId);
+    if (plan && (plan.images || []).length) {
+      Promise.all(plan.images.map(async img => {
+        const dataUrl = await ImageDB.get('plan_' + img.id);
+        return { ...img, dataUrl };
+      })).then(imgs => {
+        const container = document.getElementById('planDetailImages');
+        if (!container) return;
+        const validImgs = imgs.filter(i => i.dataUrl);
+        if (!validImgs.length) return;
+        container.innerHTML = `<div class="card"><div style="font-size:13px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Chart Screenshots</div><div style="display:flex;flex-wrap:wrap;gap:12px">${validImgs.map(img=>`<div class="image-thumb"><img src="${img.dataUrl}" alt="${escHtml(img.title)}" onclick="previewImage('${img.dataUrl}')" style="cursor:zoom-in;width:160px;height:110px;object-fit:cover"><div style="font-size:11px;color:#64748b;text-align:center;margin-top:3px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(img.title)}</div></div>`).join('')}</div></div>`;
+      });
+    }
+    if (plan && (plan.intradayImages || []).length) {
+      Promise.all(plan.intradayImages.map(async img => {
+        const dataUrl = await ImageDB.get('intraday_' + img.id);
+        return { ...img, dataUrl };
+      })).then(imgs => {
+        const container = document.getElementById('intradayDetailImages');
+        if (!container) return;
+        const validImgs = imgs.filter(i => i.dataUrl);
+        if (!validImgs.length) return;
+        container.innerHTML = validImgs.map(img=>`<div class="image-thumb"><img src="${img.dataUrl}" alt="${escHtml(img.title)}" onclick="previewImage('${img.dataUrl}')" style="cursor:zoom-in;width:160px;height:110px;object-fit:cover"><div style="font-size:11px;color:#64748b;text-align:center;margin-top:3px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(img.title)}</div></div>`).join('');
+      });
+    }
+  }
 }
 
 // ============================================================
@@ -1479,10 +2199,10 @@ function renderSetups() {
   // Migrate existing journals that don't have setupDetails yet
   if (!j.setupDetails) {
     const jIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
-    state.journals[jIdx].setupDetails = Object.fromEntries((j.setups || DEFAULT_SETUPS).map(s => [s, { description: '', imageIds: [] }]));
+    state.journals[jIdx].setupDetails = Object.fromEntries((state.personalization.setups.length ? state.personalization.setups : DEFAULT_SETUPS).map(s => [s, { description: '', imageIds: [] }]));
     persistJournals();
   }
-  const setups = j.setups || DEFAULT_SETUPS;
+  const setups = state.personalization.setups.length ? state.personalization.setups : DEFAULT_SETUPS;
   const details = j.setupDetails || {};
   const trades = journalTrades();
   const setupStats = calcSetupStats(trades);
@@ -1848,11 +2568,6 @@ function handleCreateJournal(event) {
     accountSize,
     initialAccountSize: accountSize,
     fixedR,
-    setups: [],
-    winReasons: [],
-    lossReasons: [],
-    entryTypes: [],
-    entryTriggers: [],
     setupDetails: {},
     createdAt: new Date().toISOString(),
   };
@@ -1880,6 +2595,10 @@ async function exportJSON() {
       (d.imageIds || []).forEach(id => imageIds.push({ key: id, prefix: 'setup_' }));
     });
   });
+  const plans = DB.getPlans();
+  plans.forEach(p => {
+    (p.images || []).forEach(img => imageIds.push({ key: img.id, prefix: 'plan_' }));
+  });
 
   // Load all images from IndexedDB
   const images = {};
@@ -1893,6 +2612,8 @@ async function exportJSON() {
     exportedAt: new Date().toISOString(),
     journals,
     trades,
+    plans,
+    personalization: DB.getPersonalization(),
     images,
   };
 
@@ -1936,6 +2657,18 @@ async function importJSON(input) {
   const existingTradeIds = new Set(existingTrades.map(t => t.id));
   const newTrades = payload.trades.filter(t => !existingTradeIds.has(t.id));
   DB.saveTrades([...existingTrades, ...newTrades]);
+
+  // Restore personalization (overwrite with imported, prefer imported if it has data)
+  if (payload.personalization) {
+    DB.savePersonalization(payload.personalization);
+    state.personalization = payload.personalization;
+  }
+
+  // Merge plans
+  const existingPlans = DB.getPlans();
+  const existingPlanIds = new Set(existingPlans.map(p => p.id));
+  const newPlans = (payload.plans || []).filter(p => !existingPlanIds.has(p.id));
+  DB.savePlans([...existingPlans, ...newPlans]);
 
   // Restore images
   const images = payload.images || {};
