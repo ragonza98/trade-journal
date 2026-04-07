@@ -2097,7 +2097,7 @@ function handleSavePersonalization(event) {
   const journalIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
   if (journalIdx >= 0) {
     const details = state.journals[journalIdx].setupDetails || {};
-    setups.forEach(s => { if (!details[s]) details[s] = { description: '', imageIds: [] }; });
+    setups.forEach(s => { if (!details[s]) details[s] = { description: '', images: [] }; });
     state.journals[journalIdx].setupDetails = details;
     persistJournals();
   }
@@ -2407,7 +2407,7 @@ function renderSetups() {
   // Migrate existing journals that don't have setupDetails yet
   if (!j.setupDetails) {
     const jIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
-    state.journals[jIdx].setupDetails = Object.fromEntries((state.personalization.setups.length ? state.personalization.setups : DEFAULT_SETUPS).map(s => [s, { description: '', imageIds: [] }]));
+    state.journals[jIdx].setupDetails = Object.fromEntries((state.personalization.setups.length ? state.personalization.setups : DEFAULT_SETUPS).map(s => [s, { description: '', images: [] }]));
     persistJournals();
   }
   const setups = state.personalization.setups.length ? state.personalization.setups : DEFAULT_SETUPS;
@@ -2418,7 +2418,7 @@ function renderSetups() {
   const sel = state.selectedSetup;
 
   const cards = setups.map(name => {
-    const d = details[name] || { description: '', imageIds: [] };
+    const d = details[name] || { description: '', images: [] };
     const s = statsMap[name];
     const isSelected = sel === name;
     return `
@@ -2489,18 +2489,32 @@ function renderSetups() {
 }
 
 function loadSetupImages(setupName) {
-  const j = currentJournal();
-  const d = (j.setupDetails || {})[setupName] || { imageIds: [] };
+  const jIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
+  if (jIdx < 0) return;
+  const d = (state.journals[jIdx].setupDetails || {})[setupName] || { images: [] };
+  // Migrate old imageIds format to images array
+  if (!d.images && d.imageIds) {
+    d.images = d.imageIds.map(id => ({ id, title: '' }));
+    delete d.imageIds;
+    persistJournals();
+  }
   const container = document.getElementById('setup-imgs-' + encodeURIComponent(setupName));
   if (!container) return;
-  Promise.all(d.imageIds.map(async id => {
-    const dataUrl = await ImageDB.get('setup_' + id);
-    return { id, dataUrl };
+  const images = d.images || [];
+  Promise.all(images.map(async img => {
+    const dataUrl = await ImageDB.get('setup_' + img.id);
+    return { ...img, dataUrl };
   })).then(imgs => {
     container.innerHTML = imgs.filter(i => i.dataUrl).map(img => `
-      <div class="image-thumb">
-        <img src="${img.dataUrl}" style="width:100px;height:70px;object-fit:cover;border-radius:6px;border:1px solid #334155;cursor:pointer" class="preview-img" data-fullsrc="${escHtml(img.dataUrl)}">
-        <button class="remove-img" onclick="deleteSetupImage('${escHtml(setupName)}','${img.id}')">✕</button>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:5px">
+        <div class="image-thumb">
+          <img src="${img.dataUrl}" style="width:100px;height:70px;object-fit:cover;border-radius:6px;border:1px solid #334155;cursor:pointer" class="preview-img" data-fullsrc="${escHtml(img.dataUrl)}">
+          <button class="remove-img" onclick="deleteSetupImage('${escHtml(setupName)}','${img.id}')">✕</button>
+        </div>
+        <input type="text" placeholder="Add name..." value="${escHtml(img.title || '')}"
+          class="form-input"
+          style="width:100px;padding:3px 6px;font-size:11px;text-align:center"
+          onblur="saveSetupImageTitle('${escHtml(setupName)}','${img.id}',this.value)">
       </div>`).join('');
     container.querySelectorAll('.preview-img').forEach(el => {
       el.addEventListener('click', () => previewImage(el.getAttribute('data-fullsrc')));
@@ -2516,8 +2530,12 @@ function handleSetupImageUpload(input, setupName) {
       await ImageDB.save('setup_' + id, e.target.result);
       const jIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
       if (!state.journals[jIdx].setupDetails) state.journals[jIdx].setupDetails = {};
-      if (!state.journals[jIdx].setupDetails[setupName]) state.journals[jIdx].setupDetails[setupName] = { description: '', imageIds: [] };
-      state.journals[jIdx].setupDetails[setupName].imageIds.push(id);
+      if (!state.journals[jIdx].setupDetails[setupName]) state.journals[jIdx].setupDetails[setupName] = { description: '', images: [] };
+      const d = state.journals[jIdx].setupDetails[setupName];
+      // Migrate if needed
+      if (!d.images && d.imageIds) { d.images = d.imageIds.map(i => ({ id: i, title: '' })); delete d.imageIds; }
+      if (!d.images) d.images = [];
+      d.images.push({ id, title: '' });
       persistJournals();
       loadSetupImages(setupName);
     };
@@ -2531,9 +2549,21 @@ function deleteSetupImage(setupName, imageId) {
   if (jIdx < 0) return;
   ImageDB.delete('setup_' + imageId);
   const d = state.journals[jIdx].setupDetails?.[setupName];
-  if (d) d.imageIds = d.imageIds.filter(i => i !== imageId);
+  if (d) {
+    if (d.images) d.images = d.images.filter(i => i.id !== imageId);
+    if (d.imageIds) d.imageIds = d.imageIds.filter(i => i !== imageId);
+  }
   persistJournals();
   loadSetupImages(setupName);
+}
+
+function saveSetupImageTitle(setupName, imageId, title) {
+  const jIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
+  if (jIdx < 0) return;
+  const d = state.journals[jIdx].setupDetails?.[setupName];
+  if (!d || !d.images) return;
+  const img = d.images.find(i => i.id === imageId);
+  if (img) { img.title = title; persistJournals(); }
 }
 
 function saveSetupDetail(setupName) {
@@ -2541,7 +2571,7 @@ function saveSetupDetail(setupName) {
   if (jIdx < 0) return;
   const desc = document.getElementById('setup-desc-' + encodeURIComponent(setupName))?.value || '';
   if (!state.journals[jIdx].setupDetails) state.journals[jIdx].setupDetails = {};
-  if (!state.journals[jIdx].setupDetails[setupName]) state.journals[jIdx].setupDetails[setupName] = { description: '', imageIds: [] };
+  if (!state.journals[jIdx].setupDetails[setupName]) state.journals[jIdx].setupDetails[setupName] = { description: '', images: [] };
   state.journals[jIdx].setupDetails[setupName].description = desc;
   persistJournals();
   showToast('Setup saved!');
@@ -2577,7 +2607,7 @@ function handleCreateSetup(event) {
   }
   state.journals[jIdx].setups = [...(state.journals[jIdx].setups || DEFAULT_SETUPS), name];
   if (!state.journals[jIdx].setupDetails) state.journals[jIdx].setupDetails = {};
-  state.journals[jIdx].setupDetails[name] = { description: '', imageIds: [] };
+  state.journals[jIdx].setupDetails[name] = { description: '', images: [] };
   persistJournals();
   document.getElementById('createSetupModal')?.remove();
   state.selectedSetup = name;
@@ -2588,9 +2618,12 @@ function confirmDeleteSetup(name) {
   if (!confirm(`Delete setup "${name}"? This won't affect existing trades.`)) return;
   const jIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
   if (jIdx < 0) return;
-  // Clean up images
+  // Clean up images (support both old imageIds and new images formats)
   const d = state.journals[jIdx].setupDetails?.[name];
-  if (d) d.imageIds.forEach(id => ImageDB.delete('setup_' + id));
+  if (d) {
+    (d.images || []).forEach(img => ImageDB.delete('setup_' + img.id));
+    (d.imageIds || []).forEach(id => ImageDB.delete('setup_' + id));
+  }
   state.journals[jIdx].setups = (state.journals[jIdx].setups || []).filter(s => s !== name);
   if (state.journals[jIdx].setupDetails) delete state.journals[jIdx].setupDetails[name];
   // Also remove from personalization
@@ -3023,7 +3056,8 @@ async function exportJSON() {
   });
   journals.forEach(j => {
     Object.values(j.setupDetails || {}).forEach(d => {
-      (d.imageIds || []).forEach(id => imageIds.push({ key: id, prefix: 'setup_' }));
+      (d.images || []).forEach(img => imageIds.push({ key: img.id, prefix: 'setup_' }));
+      (d.imageIds || []).forEach(id => imageIds.push({ key: id, prefix: 'setup_' })); // legacy
     });
   });
   const plans = DB.getPlans();
