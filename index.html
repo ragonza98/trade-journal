@@ -97,6 +97,8 @@ const DB = {
   saveTrades(t) { this.set('trades', t); },
   getPlans() { return this.get('plans', []); },
   savePlans(p) { this.set('plans', p); },
+  getLessons() { return this.get('lessons', []); },
+  saveLessons(l) { this.set('lessons', l); },
   getPersonalization() { return this.get('personalization', null); },
   savePersonalization(p) { this.set('personalization', p); },
   getCurrentJournalId() { return this.get('currentJournalId', null); },
@@ -147,6 +149,7 @@ const state = {
   journals: [],
   trades: [],
   plans: [],
+  lessons: [],
   personalization: { setups: [], entryTypes: [], entryTriggers: [], winReasons: [], lossReasons: [], missedReasons: [], biasReasons: [] },
   currentJournalId: null,
   view: 'dashboard',
@@ -157,6 +160,8 @@ const state = {
   draftTrade: null,
   selectedSetup: null,
   selectedPlanId: null,
+  selectedLessonId: null,
+  tradingMenuOpen: true,
   premarketFormDate: '',
   premarketListMonth: '',
 };
@@ -192,10 +197,28 @@ function fmtR(n) { if (n == null || isNaN(n)) return '-'; return (n >= 0 ? '+' :
 function fmtPct(n) { return n.toFixed(1) + '%'; }
 function escHtml(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+function gradeColor(n) { return n >= 8 ? '#10b981' : n >= 5 ? '#f59e0b' : '#ef4444'; }
+
+function calcTradeGrade() {
+  const exec = parseInt(document.querySelector('[name=gradeExecution]')?.value) || 5;
+  const mgmt = parseInt(document.querySelector('[name=gradeManagement]')?.value) || 5;
+  const emo  = parseInt(document.querySelector('[name=gradeEmotional]')?.value) || 5;
+  const plan = parseInt(document.querySelector('[name=gradePlanAdherence]')?.value) || 5;
+  const avg = (exec + mgmt + emo + plan) / 4;
+  const display = document.getElementById('tradeGradeDisplay');
+  const input = document.getElementById('tradeGradeInput');
+  if (display) {
+    display.textContent = avg.toFixed(1);
+    display.style.color = gradeColor(avg);
+  }
+  if (input) input.value = avg.toFixed(2);
+}
+
 function loadState() {
   state.journals = DB.getJournals();
   state.trades = DB.getTrades();
   state.plans = DB.getPlans();
+  state.lessons = DB.getLessons();
   state.currentJournalId = DB.getCurrentJournalId();
   // Load global personalization, migrating from current journal if first run
   let p = DB.getPersonalization();
@@ -217,6 +240,7 @@ function loadState() {
 function persistTrades() { DB.saveTrades(state.trades); }
 function persistJournals() { DB.saveJournals(state.journals); }
 function persistPlans() { DB.savePlans(state.plans); }
+function persistLessons() { DB.saveLessons(state.lessons); }
 function persistPersonalization() { DB.savePersonalization(state.personalization); }
 
 // ============================================================
@@ -329,6 +353,7 @@ function renderApp() {
     history: renderHistory,
     statistics: renderStatistics,
     setups: renderSetups,
+    lessons: renderLessons,
     settings: renderSettings,
     tradeDetail: renderTradeDetail,
     premarket: renderPremarketList,
@@ -351,10 +376,8 @@ function renderApp() {
       <nav style="flex:1">
         ${navItem('dashboard','Dashboard','M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6')}
         ${navItem('premarket','Premarket Plan','M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z')}
-        ${navItem('newTrade','New Trade','M12 4v16m8-8H4')}
-        ${navItem('history','Trade History','M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2')}
+        ${tradingNavGroup()}
         ${navItem('statistics','Statistics','M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z')}
-        ${navItem('setups','Setups','M19 11H7m12 0a2 2 0 110 4m0-4a2 2 0 100-4m-12 4a2 2 0 110 4m0-4a2 2 0 100-4m0 4h.01M7 15a2 2 0 110-4m0 0h12')}
         ${navItem('settings','Settings','M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z')}
       </nav>
       <div style="padding:20px 16px 24px;display:flex;flex-direction:column;align-items:center;gap:6px">
@@ -391,6 +414,42 @@ function navItem(view, label, iconPath) {
     <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="${escHtml(iconPath)}"/></svg>
     ${label}
   </button>`;
+}
+
+function toggleTradingMenu() {
+  state.tradingMenuOpen = !state.tradingMenuOpen;
+  render();
+}
+
+function tradingNavGroup() {
+  const tradingViews = ['newTrade', 'history', 'setups', 'lessons'];
+  const isAnyActive = tradingViews.includes(state.view);
+  const isOpen = state.tradingMenuOpen || isAnyActive;
+  const subItems = [
+    { view: 'newTrade',  label: 'New Trade',     icon: 'M12 4v16m8-8H4' },
+    { view: 'history',   label: 'Trade History',  icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
+    { view: 'setups',    label: 'Setups',         icon: 'M19 11H7m12 0a2 2 0 110 4m0-4a2 2 0 100-4m-12 4a2 2 0 110 4m0-4a2 2 0 100-4m0 4h.01M7 15a2 2 0 110-4m0 0h12' },
+    { view: 'lessons',   label: 'Lessons',        icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
+  ];
+  return `
+  <div>
+    <button class="nav-link${isAnyActive ? ' active' : ''}" onclick="toggleTradingMenu()" style="justify-content:space-between;width:calc(100% - 16px)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+        Trading
+      </div>
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="transition:transform 0.2s;transform:rotate(${isOpen ? '180' : '0'}deg);flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+    </button>
+    ${isOpen ? `<div style="margin-left:12px;border-left:1px solid #1e293b;padding-left:4px">
+      ${subItems.map(({ view, label, icon }) => {
+        const active = state.view === view ? 'active' : '';
+        return `<button class="nav-link ${active}" onclick="navigate('${view}')" style="font-size:13px;padding:8px 12px">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="${escHtml(icon)}"/></svg>
+          ${label}
+        </button>`;
+      }).join('')}
+    </div>` : ''}
+  </div>`;
 }
 
 // ============================================================
@@ -772,6 +831,64 @@ function renderNewTrade() {
         <input type="file" id="htfUpload" accept="image/*" multiple style="display:none" onchange="handleImageUpload(this,'htf')">
       </div>
 
+      <!-- TRADE GRADES (hidden when Flat) -->
+      <div class="card" id="gradesCard" style="margin-bottom:16px;display:${v('outcome')==='Flat'?'none':'block'}">
+        <div style="font-size:15px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px">Trade Grades</div>
+        <div style="font-size:12px;color:#64748b;margin-bottom:16px">Rate each aspect 1–10. Trade Grade is auto-calculated as the average.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:16px">
+          <div>
+            <label class="label">Execution <span id="gradeExecLabel" style="color:#3b82f6;font-weight:700;text-transform:none">${v('gradeExecution','5')}/10</span></label>
+            <div class="confidence-track">
+              <input type="range" name="gradeExecution" min="1" max="10" value="${v('gradeExecution','5')}" oninput="document.getElementById('gradeExecLabel').textContent=this.value+'/10';calcTradeGrade();saveDraft()">
+              <div class="confidence-labels"><span>1 — Poor</span><span>10 — Perfect</span></div>
+            </div>
+          </div>
+          <div>
+            <label class="label">Management <span id="gradeMgmtLabel" style="color:#3b82f6;font-weight:700;text-transform:none">${v('gradeManagement','5')}/10</span></label>
+            <div class="confidence-track">
+              <input type="range" name="gradeManagement" min="1" max="10" value="${v('gradeManagement','5')}" oninput="document.getElementById('gradeMgmtLabel').textContent=this.value+'/10';calcTradeGrade();saveDraft()">
+              <div class="confidence-labels"><span>1 — Poor</span><span>10 — Perfect</span></div>
+            </div>
+          </div>
+          <div>
+            <label class="label">Emotional Management <span id="gradeEmoLabel" style="color:#3b82f6;font-weight:700;text-transform:none">${v('gradeEmotional','5')}/10</span></label>
+            <div class="confidence-track">
+              <input type="range" name="gradeEmotional" min="1" max="10" value="${v('gradeEmotional','5')}" oninput="document.getElementById('gradeEmoLabel').textContent=this.value+'/10';calcTradeGrade();saveDraft()">
+              <div class="confidence-labels"><span>1 — Poor</span><span>10 — Perfect</span></div>
+            </div>
+          </div>
+          <div>
+            <label class="label">Plan Adherence <span id="gradePlanLabel" style="color:#3b82f6;font-weight:700;text-transform:none">${v('gradePlanAdherence','5')}/10</span></label>
+            <div class="confidence-track">
+              <input type="range" name="gradePlanAdherence" min="1" max="10" value="${v('gradePlanAdherence','5')}" oninput="document.getElementById('gradePlanLabel').textContent=this.value+'/10';calcTradeGrade();saveDraft()">
+              <div class="confidence-labels"><span>1 — Ignored plan</span><span>10 — Perfect</span></div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:#0a0f1e;border-radius:8px;border:1px solid #1e293b">
+          <div>
+            <div style="font-size:12px;color:#64748b;text-transform:uppercase;font-weight:600;letter-spacing:0.05em;margin-bottom:2px">Trade Grade</div>
+            <div style="font-size:11px;color:#475569">Auto-calculated average</div>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:2px">
+            <span id="tradeGradeDisplay" style="font-size:32px;font-weight:800;color:${gradeColor(parseFloat(v('tradeGrade','5')))}">${v('tradeGrade') ? parseFloat(v('tradeGrade')).toFixed(1) : '5.0'}</span>
+            <span style="font-size:14px;color:#64748b">/10</span>
+          </div>
+          <input type="hidden" name="tradeGrade" id="tradeGradeInput" value="${v('tradeGrade','5')}">
+        </div>
+        ${(() => {
+          const journalLessons = state.lessons.filter(l => l.journalId === state.currentJournalId);
+          if (!journalLessons.length) return '';
+          return `<div style="margin-top:14px">
+            <label class="label">Rule / Lesson Violated <span style="color:#64748b;text-transform:none;font-weight:400">(optional)</span></label>
+            <select name="lessonViolatedId" class="form-select" onchange="saveDraft()">
+              <option value="">None</option>
+              ${journalLessons.map(l => `<option value="${l.id}" ${v('lessonViolatedId')===l.id?'selected':''}>${escHtml(l.name)}</option>`).join('')}
+            </select>
+          </div>`;
+        })()}
+      </div>
+
       <!-- EMOTIONS -->
       <div class="card" style="margin-bottom:24px">
         <div style="font-size:15px;font-weight:700;color:#ec4899;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Emotions & Notes</div>
@@ -893,7 +1010,7 @@ function renderHistory() {
       ${trades.length ? `
       <table>
         <thead><tr>
-          <th>Date</th><th>Time</th><th>Ticker</th><th>Setup</th><th>Conf.</th><th>Direction</th><th>Outcome</th><th>$ Amount</th><th>Realized R</th><th>Int. RR</th>
+          <th>Date</th><th>Time</th><th>Ticker</th><th>Setup</th><th>Conf.</th><th>Direction</th><th>Outcome</th><th>$ Amount</th><th>Realized R</th><th>Int. RR</th><th>Grade</th>
         </tr></thead>
         <tbody>
           ${trades.map(t=>`
@@ -908,6 +1025,7 @@ function renderHistory() {
             <td style="color:${outcomeColor(t.outcome)};font-weight:600">${t.outcome==='Win'?'+':t.outcome==='Missed'?'~':'-'}$${Math.abs(t.dollarAmount||0).toFixed(2)}</td>
             <td style="color:${outcomeColor(t.outcome)}">${t.outcome==='Win'?'+':t.outcome==='Missed'?'~':'-'}${(t.realizedR||0).toFixed(2)}R</td>
             <td>${t.rr||'—'}</td>
+            <td style="font-weight:700;color:${t.gradeExecution!=null?gradeColor(t.tradeGrade||5):'#475569'}">${t.gradeExecution!=null?(t.tradeGrade||5).toFixed(1):'—'}</td>
           </tr>`).join('')}
         </tbody>
       </table>` : '<div style="text-align:center;color:#64748b;padding:40px">No trades found</div>'}
@@ -979,6 +1097,12 @@ async function renderTradeDetailAsync(tradeId) {
         ${detailRow('Outcome Reasons', (t.outcomeReasons||[]).map(r=>`<span class="tag">${escHtml(r)}</span>`).join(' ')||'—')}
         ${t.outcome==='Missed' && t.hypotheticalOutcome ? detailRow('Hypothetical Outcome', `<span class="${outcomeBadge(t.hypotheticalOutcome)}">${t.hypotheticalOutcome==='Win'?'Would have been a Win':'Would have been a Loss'}</span>`) : ''}
         ${t.outcome==='Missed' && (t.hypotheticalOutcomeReasons||[]).length ? detailRow('Hypothetical Reasons', (t.hypotheticalOutcomeReasons||[]).map(r=>`<span class="tag">${escHtml(r)}</span>`).join(' ')) : ''}
+        ${(() => {
+          if (!t.lessonViolatedId) return '';
+          const lesson = state.lessons.find(l => l.id === t.lessonViolatedId);
+          if (!lesson) return '';
+          return detailRow('Lesson Violated', `<button class="btn-secondary btn-sm" onclick="state.selectedLessonId='${lesson.id}';navigate('lessons')" style="font-size:12px;color:#ef4444;border-color:rgba(239,68,68,0.4)">${escHtml(lesson.name)}</button>`);
+        })()}
       </div>
       <div class="card">
         <div style="font-size:13px;font-weight:700;color:#8b5cf6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Context</div>
@@ -1010,6 +1134,24 @@ async function renderTradeDetailAsync(tradeId) {
           <img src="${img.dataUrl}" style="max-width:280px;max-height:180px;border-radius:8px;border:1px solid #1e293b;cursor:pointer" data-fullsrc="${escHtml(img.dataUrl)}" class="preview-img">
           <div style="font-size:12px;color:#64748b;margin-top:4px">${escHtml(img.title||'')}</div>
         </div>` : '').join('')}
+      </div>
+    </div>` : ''}
+
+    ${(t.gradeExecution || t.tradeGrade) ? `
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px">Trade Grades</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px">
+        ${statCard('Execution', (t.gradeExecution||5)+'/10', null, gradeColor(t.gradeExecution||5))}
+        ${statCard('Management', (t.gradeManagement||5)+'/10', null, gradeColor(t.gradeManagement||5))}
+        ${statCard('Emotional Mgmt', (t.gradeEmotional||5)+'/10', null, gradeColor(t.gradeEmotional||5))}
+        ${statCard('Plan Adherence', (t.gradePlanAdherence||5)+'/10', null, gradeColor(t.gradePlanAdherence||5))}
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;background:#0a0f1e;border-radius:8px;border:1px solid #1e293b">
+        <span style="font-size:14px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.05em">Overall Trade Grade</span>
+        <div style="display:flex;align-items:baseline;gap:2px">
+          <span style="font-size:28px;font-weight:800;color:${gradeColor(t.tradeGrade||5)}">${(t.tradeGrade||5).toFixed(1)}</span>
+          <span style="font-size:13px;color:#64748b">/10</span>
+        </div>
       </div>
     </div>` : ''}
 
@@ -1715,6 +1857,9 @@ function updateMissedFields(outcome) {
 
   const executionsCard = document.getElementById('executionsCard');
   if (executionsCard) executionsCard.style.display = isFlat ? 'none' : 'block';
+
+  const gradesCard = document.getElementById('gradesCard');
+  if (gradesCard) gradesCard.style.display = isFlat ? 'none' : 'block';
 }
 
 function updateDurationDisplay() {
@@ -1783,6 +1928,12 @@ function saveDraft() {
     premarketPlanId: form.querySelector('[name=premarketPlanId]')?.value || null,
     hypotheticalOutcome: form.querySelector('[name=hypotheticalOutcome]')?.value || '',
     hypotheticalOutcomeReasons: Array.from(document.querySelectorAll('#hypotheticalReasons .checkbox-pill.checked')).map(el => el.getAttribute('data-value')),
+    gradeExecution: form.querySelector('[name=gradeExecution]')?.value || '5',
+    gradeManagement: form.querySelector('[name=gradeManagement]')?.value || '5',
+    gradeEmotional: form.querySelector('[name=gradeEmotional]')?.value || '5',
+    gradePlanAdherence: form.querySelector('[name=gradePlanAdherence]')?.value || '5',
+    tradeGrade: document.getElementById('tradeGradeInput')?.value || '5',
+    lessonViolatedId: form.querySelector('[name=lessonViolatedId]')?.value || null,
   };
 }
 
@@ -1860,6 +2011,12 @@ async function handleSaveTrade(event) {
     htfPdArray: data.get('htfPdArray'),
     marketEnvironment: data.get('marketEnvironment'),
     emotions: data.get('emotions'),
+    gradeExecution: parseInt(data.get('gradeExecution')) || 5,
+    gradeManagement: parseInt(data.get('gradeManagement')) || 5,
+    gradeEmotional: parseInt(data.get('gradeEmotional')) || 5,
+    gradePlanAdherence: parseInt(data.get('gradePlanAdherence')) || 5,
+    tradeGrade: parseFloat(data.get('tradeGrade')) || 5,
+    lessonViolatedId: data.get('lessonViolatedId') || null,
     executions: allExec,
     htfImages: allHtf,
     createdAt: isEdit ? (state.trades.find(t=>t.id===data.get('tradeId'))?.createdAt || new Date().toISOString()) : new Date().toISOString(),
@@ -2122,6 +2279,17 @@ function attachListeners() {
     }
     if (t) updateDurationDisplay();
     if (t) {
+      // Restore grade labels
+      const gx = t.gradeExecution || 5, gm = t.gradeManagement || 5, ge = t.gradeEmotional || 5, gp = t.gradePlanAdherence || 5;
+      const el = document.getElementById('gradeExecLabel'); if (el) el.textContent = gx + '/10';
+      const ml = document.getElementById('gradeMgmtLabel'); if (ml) ml.textContent = gm + '/10';
+      const em = document.getElementById('gradeEmoLabel');  if (em) em.textContent = ge + '/10';
+      const pl = document.getElementById('gradePlanLabel'); if (pl) pl.textContent = gp + '/10';
+      const avg = (gx + gm + ge + gp) / 4;
+      const gd = document.getElementById('tradeGradeDisplay'); if (gd) { gd.textContent = avg.toFixed(1); gd.style.color = gradeColor(avg); }
+      const gi = document.getElementById('tradeGradeInput'); if (gi) gi.value = avg.toFixed(2);
+    }
+    if (t) {
       Promise.all((t.executions||[]).map(async img => {
         const dataUrl = await ImageDB.get(img.id);
         return { ...img, dataUrl };
@@ -2165,6 +2333,9 @@ function attachListeners() {
   }
   if (state.view === 'setups' && state.selectedSetup) {
     loadSetupImages(state.selectedSetup);
+  }
+  if (state.view === 'lessons' && state.selectedLessonId) {
+    loadLessonImages(state.selectedLessonId);
   }
   if (state.view === 'premarketForm') {
     pendingImages.plan = [];
@@ -2273,6 +2444,13 @@ function renderSetups() {
 
       ${isSelected ? `
       <div>
+        <div style="margin-bottom:14px">
+          <label class="label">Rename</label>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="setup-rename-${encodeURIComponent(name)}" class="form-input" value="${escHtml(name)}" style="flex:1">
+            <button type="button" class="btn-secondary btn-sm" onclick="renameSetup('${escHtml(name)}')">Rename</button>
+          </div>
+        </div>
         <div style="margin-bottom:14px">
           <label class="label">Description / Notes</label>
           <textarea id="setup-desc-${encodeURIComponent(name)}" class="form-input" rows="4" placeholder="Explain the setup, rules, conditions..." style="resize:vertical">${escHtml(d.description||'')}</textarea>
@@ -2415,9 +2593,225 @@ function confirmDeleteSetup(name) {
   if (d) d.imageIds.forEach(id => ImageDB.delete('setup_' + id));
   state.journals[jIdx].setups = (state.journals[jIdx].setups || []).filter(s => s !== name);
   if (state.journals[jIdx].setupDetails) delete state.journals[jIdx].setupDetails[name];
+  // Also remove from personalization
+  state.personalization.setups = state.personalization.setups.filter(s => s !== name);
   persistJournals();
+  persistPersonalization();
   if (state.selectedSetup === name) state.selectedSetup = null;
   navigate('setups');
+}
+
+function renameSetup(oldName) {
+  const el = document.getElementById('setup-rename-' + encodeURIComponent(oldName));
+  if (!el) return;
+  const newName = el.value.trim();
+  if (!newName) return;
+  if (newName === oldName) { showToast('No change made.'); return; }
+  if (state.personalization.setups.includes(newName)) {
+    alert(`A setup named "${newName}" already exists.`); return;
+  }
+  // Update personalization
+  const pi = state.personalization.setups.indexOf(oldName);
+  if (pi >= 0) state.personalization.setups[pi] = newName;
+  persistPersonalization();
+  // Update setupDetails key in current journal
+  const jIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
+  if (jIdx >= 0) {
+    if (state.journals[jIdx].setupDetails) {
+      const detail = state.journals[jIdx].setupDetails[oldName];
+      if (detail) {
+        state.journals[jIdx].setupDetails[newName] = detail;
+        delete state.journals[jIdx].setupDetails[oldName];
+      }
+    }
+    if (state.journals[jIdx].setups) {
+      const si = state.journals[jIdx].setups.indexOf(oldName);
+      if (si >= 0) state.journals[jIdx].setups[si] = newName;
+    }
+    persistJournals();
+  }
+  state.selectedSetup = newName;
+  showToast(`Renamed to "${newName}"`);
+  navigate('setups');
+}
+
+// ============================================================
+//  LESSONS
+// ============================================================
+function renderLessons() {
+  const lessons = state.lessons.filter(l => l.journalId === state.currentJournalId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const sel = state.selectedLessonId;
+  const trades = journalTrades();
+
+  const cards = lessons.map(lesson => {
+    const isSelected = sel === lesson.id;
+    const violationCount = trades.filter(t => t.lessonViolatedId === lesson.id).length;
+    return `
+    <div id="lesson-card-${lesson.id}" class="card" style="margin-bottom:14px;border-color:${isSelected ? '#10b981' : '#1e293b'}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between">
+        <div style="flex:1;cursor:pointer;min-width:0" onclick="state.selectedLessonId=state.selectedLessonId==='${lesson.id}'?null:'${lesson.id}';navigate('lessons')">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+            <div style="font-size:16px;font-weight:700">${escHtml(lesson.name)}</div>
+            ${violationCount > 0 ? `<span style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);border-radius:4px;padding:1px 8px;font-size:11px;font-weight:700">${violationCount} violation${violationCount!==1?'s':''}</span>` : ''}
+          </div>
+          ${lesson.content ? `<div style="font-size:13px;color:#64748b;line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(lesson.content)}</div>` : '<div style="font-size:13px;color:#475569">No notes yet</div>'}
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-left:12px;flex-shrink:0">
+          <button class="btn-secondary btn-sm" onclick="state.selectedLessonId=state.selectedLessonId==='${lesson.id}'?null:'${lesson.id}';navigate('lessons')" style="min-width:56px">${isSelected ? 'Close' : 'Edit'}</button>
+          <button class="btn-danger btn-sm" onclick="confirmDeleteLesson('${lesson.id}')">✕</button>
+        </div>
+      </div>
+
+      ${isSelected ? `
+      <div style="margin-top:16px">
+        <div style="margin-bottom:14px">
+          <label class="label">Lesson Name</label>
+          <input type="text" id="lesson-name-${lesson.id}" class="form-input" value="${escHtml(lesson.name)}">
+        </div>
+        <div style="margin-bottom:14px">
+          <label class="label">Notes / Content</label>
+          <textarea id="lesson-content-${lesson.id}" class="form-input" rows="7" placeholder="Write your dos, don'ts, rules, insights, study notes..." style="resize:vertical">${escHtml(lesson.content || '')}</textarea>
+        </div>
+        <div style="margin-bottom:14px">
+          <label class="label">Images</label>
+          <div id="lesson-imgs-${lesson.id}" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px"></div>
+          <div class="image-upload-area" onclick="document.getElementById('lesson-upload-${lesson.id}').click()">
+            <svg width="20" height="20" fill="none" stroke="#64748b" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 4px"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+            <div style="font-size:12px;color:#64748b">Upload images (charts, screenshots)</div>
+          </div>
+          <input type="file" id="lesson-upload-${lesson.id}" accept="image/*" multiple style="display:none" onchange="handleLessonImageUpload(this,'${lesson.id}')">
+        </div>
+        <button class="btn-primary btn-sm" onclick="saveLessonDetail('${lesson.id}')">Save Lesson</button>
+      </div>` : ''}
+    </div>`;
+  });
+
+  return `
+  <div style="padding:28px;max-width:860px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <h1 style="font-size:22px;font-weight:700;margin:0">Lessons</h1>
+      <button class="btn-primary" onclick="showNewLessonModal()">+ New Lesson</button>
+    </div>
+    <div style="font-size:13px;color:#64748b;margin-bottom:24px">Document your dos, don'ts, trading rules, and setup studies</div>
+    ${lessons.length ? cards.join('') : `
+    <div class="card" style="text-align:center;padding:48px">
+      <svg width="40" height="40" fill="none" stroke="#334155" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 12px"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+      <div style="font-size:16px;font-weight:600;color:#94a3b8;margin-bottom:6px">No lessons yet</div>
+      <div style="font-size:13px;color:#64748b;margin-bottom:20px">Start building your trading playbook — rules, patterns, and insights</div>
+      <button class="btn-primary" onclick="showNewLessonModal()">+ New Lesson</button>
+    </div>`}
+  </div>`;
+}
+
+function showNewLessonModal() {
+  const existing = document.getElementById('newLessonModal');
+  if (existing) existing.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+  <div class="modal-overlay" id="newLessonModal">
+    <div class="modal" style="width:400px">
+      <h2 style="font-size:18px;font-weight:700;margin:0 0 16px">New Lesson</h2>
+      <form onsubmit="handleCreateLesson(event)">
+        <label class="label">Lesson Title</label>
+        <input type="text" name="lessonName" class="form-input" placeholder="e.g. Never chase a breakout, OTE entry rules..." style="margin-bottom:16px" required autofocus>
+        <div style="display:flex;gap:10px">
+          <button type="submit" class="btn-primary">Create</button>
+          <button type="button" class="btn-secondary" onclick="document.getElementById('newLessonModal').remove()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>`);
+}
+
+function handleCreateLesson(event) {
+  event.preventDefault();
+  const name = event.target.querySelector('[name=lessonName]').value.trim();
+  if (!name) return;
+  const lesson = {
+    id: uid(),
+    journalId: state.currentJournalId,
+    name,
+    content: '',
+    imageIds: [],
+    createdAt: new Date().toISOString(),
+  };
+  state.lessons.push(lesson);
+  persistLessons();
+  document.getElementById('newLessonModal')?.remove();
+  state.selectedLessonId = lesson.id;
+  navigate('lessons');
+}
+
+function saveLessonDetail(lessonId) {
+  const idx = state.lessons.findIndex(l => l.id === lessonId);
+  if (idx < 0) return;
+  const nameEl = document.getElementById('lesson-name-' + lessonId);
+  const contentEl = document.getElementById('lesson-content-' + lessonId);
+  if (nameEl) state.lessons[idx].name = nameEl.value.trim() || state.lessons[idx].name;
+  if (contentEl) state.lessons[idx].content = contentEl.value;
+  persistLessons();
+  showToast('Lesson saved!');
+  navigate('lessons');
+}
+
+function confirmDeleteLesson(lessonId) {
+  const lesson = state.lessons.find(l => l.id === lessonId);
+  if (!lesson || !confirm(`Delete "${lesson.name}"? This cannot be undone.`)) return;
+  // Clean up images
+  (lesson.imageIds || []).forEach(id => ImageDB.delete('lesson_' + id));
+  state.lessons = state.lessons.filter(l => l.id !== lessonId);
+  persistLessons();
+  if (state.selectedLessonId === lessonId) state.selectedLessonId = null;
+  navigate('lessons');
+}
+
+function handleLessonImageUpload(input, lessonId) {
+  Array.from(input.files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = async e => {
+      const id = uid();
+      await ImageDB.save('lesson_' + id, e.target.result);
+      const idx = state.lessons.findIndex(l => l.id === lessonId);
+      if (idx >= 0) {
+        if (!state.lessons[idx].imageIds) state.lessons[idx].imageIds = [];
+        state.lessons[idx].imageIds.push(id);
+        persistLessons();
+        loadLessonImages(lessonId);
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+}
+
+function deleteLessonImage(lessonId, imageId) {
+  ImageDB.delete('lesson_' + imageId);
+  const idx = state.lessons.findIndex(l => l.id === lessonId);
+  if (idx >= 0) {
+    state.lessons[idx].imageIds = (state.lessons[idx].imageIds || []).filter(i => i !== imageId);
+    persistLessons();
+    loadLessonImages(lessonId);
+  }
+}
+
+function loadLessonImages(lessonId) {
+  const lesson = state.lessons.find(l => l.id === lessonId);
+  if (!lesson) return;
+  const container = document.getElementById('lesson-imgs-' + lessonId);
+  if (!container) return;
+  Promise.all((lesson.imageIds || []).map(async id => {
+    const dataUrl = await ImageDB.get('lesson_' + id);
+    return { id, dataUrl };
+  })).then(imgs => {
+    container.innerHTML = imgs.filter(i => i.dataUrl).map(img => `
+      <div class="image-thumb">
+        <img src="${img.dataUrl}" style="width:100px;height:70px;object-fit:cover;border-radius:6px;border:1px solid #334155;cursor:pointer" class="preview-img" data-fullsrc="${escHtml(img.dataUrl)}">
+        <button class="remove-img" onclick="deleteLessonImage('${lessonId}','${img.id}')">✕</button>
+      </div>`).join('');
+    container.querySelectorAll('.preview-img').forEach(el => {
+      el.addEventListener('click', () => previewImage(el.getAttribute('data-fullsrc')));
+    });
+  });
 }
 
 // ============================================================
