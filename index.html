@@ -36,6 +36,7 @@
     .win-badge { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
     .loss-badge { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
     .missed-badge { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
+    .flat-badge { background: rgba(100,116,139,0.15); color: #64748b; border: 1px solid rgba(100,116,139,0.3); border-radius: 4px; padding: 2px 8px; font-size: 12px; font-weight: 600; }
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; display: flex; align-items: center; justify-content: center; }
     .modal { background: #0d1424; border: 1px solid #1e293b; border-radius: 12px; padding: 28px; width: 480px; max-width: 95vw; max-height: 90vh; overflow-y: auto; }
     .checkbox-group { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
@@ -67,6 +68,7 @@
     input[type=range] { -webkit-appearance: none; width: 100%; height: 6px; border-radius: 999px; background: #1e293b; outline: none; cursor: pointer; }
     input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #3b82f6; cursor: pointer; border: 2px solid #0a0f1e; }
     input[type=range]::-webkit-slider-thumb:hover { background: #60a5fa; }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
     .confidence-track { position: relative; padding-top: 8px; }
     .confidence-labels { display: flex; justify-content: space-between; font-size: 11px; color: #64748b; margin-top: 4px; }
     .plan-outcome-opt { display:inline-flex;align-items:center;padding:8px 20px;border-radius:6px;border:1px solid #334155;background:#1e293b;color:#94a3b8;cursor:pointer;font-size:14px;font-weight:600;transition:all 0.15s; }
@@ -171,8 +173,8 @@ const DEFAULT_BIAS_REASONS = ['HTF Structure', 'HTF PD Array', 'Liquidity', 'Dai
 //  HELPERS
 // ============================================================
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
-function outcomeBadge(outcome) { return outcome === 'Win' ? 'win-badge' : outcome === 'Missed' ? 'missed-badge' : 'loss-badge'; }
-function outcomeColor(outcome) { return outcome === 'Win' ? '#10b981' : outcome === 'Missed' ? '#f59e0b' : '#ef4444'; }
+function outcomeBadge(outcome) { return outcome === 'Win' ? 'win-badge' : outcome === 'Missed' ? 'missed-badge' : outcome === 'Flat' ? 'flat-badge' : 'loss-badge'; }
+function outcomeColor(outcome) { return outcome === 'Win' ? '#10b981' : outcome === 'Missed' ? '#f59e0b' : outcome === 'Flat' ? '#64748b' : '#ef4444'; }
 function formatTime(t) {
   if (!t) return '—';
   const [h, m] = t.split(':').map(Number);
@@ -237,7 +239,7 @@ function navigate(view, opts = {}) {
 // ============================================================
 function calcStats(trades) {
   if (!trades.length) return null;
-  const executed = trades.filter(t => t.outcome !== 'Missed');
+  const executed = trades.filter(t => t.outcome !== 'Missed' && t.outcome !== 'Flat');
   const missed = trades.filter(t => t.outcome === 'Missed');
   const wins = trades.filter(t => t.outcome === 'Win');
   const losses = trades.filter(t => t.outcome === 'Loss');
@@ -304,7 +306,9 @@ function buildEquityCurve(trades, initialSize) {
   let bal = initialSize;
   const points = [{ label: 'Start', value: bal }];
   sorted.forEach(t => {
-    bal += t.outcome === 'Win' ? t.dollarAmount : -t.dollarAmount;
+    if (t.outcome !== 'Missed' && t.outcome !== 'Flat') {
+      bal += t.outcome === 'Win' ? t.dollarAmount : -t.dollarAmount;
+    }
     points.push({ label: t.date, value: bal });
   });
   return points;
@@ -569,43 +573,17 @@ function renderNewTrade() {
     <form id="tradeForm" onsubmit="handleSaveTrade(event)">
       <input type="hidden" name="tradeId" value="${isEdit ? state.editTradeId : ''}">
 
+      <!-- DATE (standalone above card) -->
+      <div style="margin-bottom:14px;max-width:200px">
+        <label class="label">Date</label>
+        <input type="date" name="date" class="form-input" value="${v('date', new Date().toISOString().slice(0,10))}" oninput="saveDraft()" required>
+      </div>
+
       <!-- TRADE ANALYSIS -->
       <div class="card" style="margin-bottom:16px">
         <div style="font-size:15px;font-weight:700;color:#3b82f6;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Trade Analysis</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-bottom:14px">
-          <div>
-            <label class="label">Date</label>
-            <input type="date" name="date" class="form-input" value="${v('date', new Date().toISOString().slice(0,10))}" oninput="saveDraft()" required>
-          </div>
-          <div>
-            <label class="label">Entry Time</label>
-            <input type="time" name="tradeTime" class="form-input" value="${v('tradeTime')}" oninput="updateDurationDisplay();saveDraft()">
-          </div>
-          <div>
-            <label class="label">Exit Time</label>
-            <input type="time" name="endTime" class="form-input" value="${v('endTime')}" oninput="updateDurationDisplay();saveDraft()">
-          </div>
-          <div>
-            <label class="label">Duration <span style="color:#64748b;text-transform:none;font-weight:400">(auto)</span></label>
-            <div class="form-input" id="durationDisplay" style="color:#f59e0b;font-weight:600;background:#0a0f1e">
-              ${(() => { const d = calcDuration(v('tradeTime'), v('endTime')); return d ? formatDuration(d) : '—'; })()}
-            </div>
-            <input type="hidden" name="duration" id="durationInput" value="${v('duration')}">
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
-          <div>
-            <label class="label">Ticker / Symbol</label>
-            <input type="text" name="ticker" class="form-input" placeholder="e.g. NQ, ES, AAPL" value="${escHtml(v('ticker'))}" oninput="saveDraft()">
-          </div>
-          <div>
-            <label class="label">Setup Confidence <span id="confLabel" style="color:#3b82f6;font-weight:700">${v('confidence','5')}/10</span></label>
-            <div class="confidence-track">
-              <input type="range" name="confidence" min="1" max="10" value="${v('confidence','5')}" oninput="document.getElementById('confLabel').textContent=this.value+'/10';saveDraft()">
-              <div class="confidence-labels"><span>1</span><span>5</span><span>10</span></div>
-            </div>
-          </div>
-        </div>
+
+        <!-- Outcome first -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
           <div>
             <label class="label">Outcome</label>
@@ -614,18 +592,19 @@ function renderNewTrade() {
               <option value="Win" ${v('outcome')==='Win'?'selected':''}>Win</option>
               <option value="Loss" ${v('outcome')==='Loss'?'selected':''}>Loss</option>
               <option value="Missed" ${v('outcome')==='Missed'?'selected':''}>Missed Trade</option>
+              <option value="Flat" ${v('outcome')==='Flat'?'selected':''} style="color:#64748b">Flat</option>
             </select>
           </div>
-          <div>
+          <div id="directionField" style="display:${v('outcome')==='Flat'?'none':'block'}">
             <label class="label">Direction</label>
-            <select name="direction" class="form-select" onchange="saveDraft()" required>
+            <select name="direction" id="directionSelect" class="form-select" onchange="saveDraft()">
               <option value="">Select...</option>
               <option value="Long" ${v('direction')==='Long'?'selected':''}>Long</option>
               <option value="Short" ${v('direction')==='Short'?'selected':''}>Short</option>
             </select>
           </div>
         </div>
-        <div style="margin-bottom:14px">
+        <div style="margin-bottom:14px" id="outcomeReasonsRow">
           <label class="label" id="outcomeReasonsLabel">Outcome Reason <span style="color:#64748b;text-transform:none;font-weight:400">(select all that apply)</span></label>
           <div id="outcomeReasons" class="checkbox-group">
             <div style="color:#64748b;font-size:13px">Select an outcome first</div>
@@ -646,17 +625,18 @@ function renderNewTrade() {
             </div>
           </div>
         </div>
+        <div id="tradeSpecificFields" style="display:${v('outcome')==='Flat'?'none':'block'}">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
           <div>
             <label class="label">Setup</label>
-            <select name="setup" class="form-select" required>
+            <select name="setup" id="setupSelect" class="form-select">
               <option value="">Select...</option>
               ${setups.map(s => `<option value="${escHtml(s)}" ${v('setup')===s?'selected':''}>${escHtml(s)}</option>`).join('')}
             </select>
           </div>
           <div>
             <label class="label">$ Amount</label>
-            <input type="number" name="dollarAmount" class="form-input" placeholder="e.g. 500" step="0.01" min="0" value="${v('dollarAmount')}" oninput="calcRealizedR();saveDraft()" required>
+            <input type="number" name="dollarAmount" id="dollarAmountInput" class="form-input" placeholder="e.g. 500" step="0.01" min="0" value="${v('dollarAmount')}" oninput="calcRealizedR();saveDraft()">
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
@@ -690,6 +670,43 @@ function renderNewTrade() {
             <input type="hidden" name="realizedR" id="realizedRInput" value="${v('realizedR')}">
           </div>
           <div></div>
+        </div>
+        </div><!-- /tradeSpecificFields -->
+
+        <!-- Timing (hidden when Flat) -->
+        <div id="timingFields" style="display:${v('outcome')==='Flat'?'none':'block'}">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
+            <div>
+              <label class="label">Entry Time</label>
+              <input type="time" name="tradeTime" class="form-input" value="${v('tradeTime')}" oninput="updateDurationDisplay();saveDraft()">
+            </div>
+            <div>
+              <label class="label">Exit Time</label>
+              <input type="time" name="endTime" class="form-input" value="${v('endTime')}" oninput="updateDurationDisplay();saveDraft()">
+            </div>
+            <div>
+              <label class="label">Duration <span style="color:#64748b;text-transform:none;font-weight:400">(auto)</span></label>
+              <div class="form-input" id="durationDisplay" style="color:#f59e0b;font-weight:600;background:#0a0f1e">
+                ${(() => { const d = calcDuration(v('tradeTime'), v('endTime')); return d ? formatDuration(d) : '—'; })()}
+              </div>
+              <input type="hidden" name="duration" id="durationInput" value="${v('duration')}">
+            </div>
+          </div>
+        </div><!-- /timingFields -->
+
+        <!-- Ticker & Confidence (always visible) -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div>
+            <label class="label">Ticker / Symbol</label>
+            <input type="text" name="ticker" class="form-input" placeholder="e.g. NQ, ES, AAPL" value="${escHtml(v('ticker'))}" oninput="saveDraft()">
+          </div>
+          <div>
+            <label class="label">Setup Confidence <span id="confLabel" style="color:#3b82f6;font-weight:700">${v('confidence','5')}/10</span></label>
+            <div class="confidence-track">
+              <input type="range" name="confidence" min="1" max="10" value="${v('confidence','5')}" oninput="document.getElementById('confLabel').textContent=this.value+'/10';saveDraft()">
+              <div class="confidence-labels"><span>1</span><span>5</span><span>10</span></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -727,13 +744,14 @@ function renderNewTrade() {
               <option value="">Select...</option>
               <option value="Trending" ${v('marketEnvironment')==='Trending'?'selected':''}>Trending</option>
               <option value="Ranging" ${v('marketEnvironment')==='Ranging'?'selected':''}>Ranging</option>
+              <option value="Search and Destroy" ${v('marketEnvironment')==='Search and Destroy'?'selected':''}>Search and Destroy</option>
             </select>
           </div>
         </div>
       </div>
 
       <!-- EXECUTIONS -->
-      <div class="card" style="margin-bottom:16px">
+      <div class="card" id="executionsCard" style="margin-bottom:16px;display:${v('outcome')==='Flat'?'none':'block'}">
         <div style="font-size:15px;font-weight:700;color:#f59e0b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Executions</div>
         <div id="executionImages" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px"></div>
         <div class="image-upload-area" onclick="document.getElementById('execUpload').click()">
@@ -800,7 +818,7 @@ function renderHistory() {
   });
   const f = state.historyFilter;
   const hasFilter = f.setup||f.outcome||f.search||f.dateFrom||f.dateTo||f.month!==''&&f.month!==undefined&&f.month||f.year||f.dayOfWeek!=='';
-  const totalPnl = trades.filter(t => t.outcome !== 'Missed').reduce((s,t) => s + (t.outcome==='Win'?t.dollarAmount:-t.dollarAmount), 0);
+  const totalPnl = trades.filter(t => t.outcome !== 'Missed' && t.outcome !== 'Flat').reduce((s,t) => s + (t.outcome==='Win'?t.dollarAmount:-t.dollarAmount), 0);
   const allYears = [...new Set(allTrades.map(t => new Date(t.date+'T00:00:00').getFullYear()))].sort((a,b)=>b-a);
 
   return `
@@ -1299,6 +1317,13 @@ function renderPremarketForm() {
         <input type="file" id="planUpload" accept="image/*" multiple style="display:none" onchange="handleImageUpload(this,'plan')">
       </div>
 
+      <!-- EMOTIONS -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:15px;font-weight:700;color:#ec4899;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Pre-Session Emotions</div>
+        <label class="label">How are you feeling going into today's session?</label>
+        <textarea name="emotions" class="form-input" rows="3" placeholder="Describe your mental state, energy level, confidence, any distractions..." style="resize:vertical">${escHtml(vp('emotions'))}</textarea>
+      </div>
+
       <!-- INTRADAY COMMENTARY -->
       <div class="card" style="margin-bottom:16px">
         <div style="font-size:15px;font-weight:700;color:#f97316;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Intraday Commentary</div>
@@ -1311,13 +1336,6 @@ function renderPremarketForm() {
           <div style="font-size:13px;color:#64748b">Click to upload intraday screenshots</div>
         </div>
         <input type="file" id="intradayUpload" accept="image/*" multiple style="display:none" onchange="handleImageUpload(this,'intraday')">
-      </div>
-
-      <!-- EMOTIONS -->
-      <div class="card" style="margin-bottom:16px">
-        <div style="font-size:15px;font-weight:700;color:#ec4899;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">Pre-Session Emotions</div>
-        <label class="label">How are you feeling going into today's session?</label>
-        <textarea name="emotions" class="form-input" rows="3" placeholder="Describe your mental state, energy level, confidence, any distractions..." style="resize:vertical">${escHtml(vp('emotions'))}</textarea>
       </div>
 
       <!-- PLAN OUTCOME -->
@@ -1673,12 +1691,30 @@ function updateOutcomeReasons(outcome, selectedReasons = []) {
 }
 
 function updateMissedFields(outcome) {
-  const el = document.getElementById('missedFields');
-  if (el) el.style.display = outcome === 'Missed' ? 'block' : 'none';
-  if (outcome !== 'Missed') {
+  const isFlat = outcome === 'Flat';
+  const isMissed = outcome === 'Missed';
+
+  const missedFields = document.getElementById('missedFields');
+  if (missedFields) missedFields.style.display = isMissed ? 'block' : 'none';
+  if (!isMissed) {
     const section = document.getElementById('hypotheticalReasonsSection');
     if (section) section.style.display = 'none';
   }
+
+  const tradeSpecific = document.getElementById('tradeSpecificFields');
+  if (tradeSpecific) tradeSpecific.style.display = isFlat ? 'none' : 'block';
+
+  const directionField = document.getElementById('directionField');
+  if (directionField) directionField.style.display = isFlat ? 'none' : 'block';
+
+  const outcomeReasonsRow = document.getElementById('outcomeReasonsRow');
+  if (outcomeReasonsRow) outcomeReasonsRow.style.display = isFlat ? 'none' : 'block';
+
+  const timingFields = document.getElementById('timingFields');
+  if (timingFields) timingFields.style.display = isFlat ? 'none' : 'block';
+
+  const executionsCard = document.getElementById('executionsCard');
+  if (executionsCard) executionsCard.style.display = isFlat ? 'none' : 'block';
 }
 
 function updateDurationDisplay() {
@@ -1772,6 +1808,7 @@ async function handleSaveTrade(event) {
 
   const outcome = data.get('outcome');
   const isMissed = outcome === 'Missed';
+  const isFlat = outcome === 'Flat';
   const dollarAmount = parseFloat(data.get('dollarAmount')) || 0;
   const fixedR = j.fixedR || 1;
   const realizedR = parseFloat(data.get('realizedR')) || (dollarAmount / fixedR);
@@ -1833,14 +1870,14 @@ async function handleSaveTrade(event) {
     // Reverse old P&L, apply new
     const journalIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
     if (journalIdx >= 0 && oldTrade) {
-      if (oldTrade.outcome !== 'Missed') state.journals[journalIdx].accountSize += (oldTrade.outcome === 'Win' ? -oldTrade.dollarAmount : oldTrade.dollarAmount);
-      if (tradeData.outcome !== 'Missed') state.journals[journalIdx].accountSize += (tradeData.outcome === 'Win' ? tradeData.dollarAmount : -tradeData.dollarAmount);
+      if (oldTrade.outcome !== 'Missed' && oldTrade.outcome !== 'Flat') state.journals[journalIdx].accountSize += (oldTrade.outcome === 'Win' ? -oldTrade.dollarAmount : oldTrade.dollarAmount);
+      if (tradeData.outcome !== 'Missed' && tradeData.outcome !== 'Flat') state.journals[journalIdx].accountSize += (tradeData.outcome === 'Win' ? tradeData.dollarAmount : -tradeData.dollarAmount);
     }
     const idx = state.trades.findIndex(t => t.id === tradeData.id);
     state.trades[idx] = tradeData;
   } else {
     const journalIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
-    if (journalIdx >= 0 && !isMissed) {
+    if (journalIdx >= 0 && !isMissed && !isFlat) {
       state.journals[journalIdx].accountSize += (outcome === 'Win' ? dollarAmount : -dollarAmount);
     }
     state.trades.push(tradeData);
@@ -1860,7 +1897,7 @@ function confirmDeleteTrade(tradeId) {
   const t = state.trades.find(x => x.id === tradeId);
   if (t) {
     const journalIdx = state.journals.findIndex(jj => jj.id === state.currentJournalId);
-    if (journalIdx >= 0) {
+    if (journalIdx >= 0 && t.outcome !== 'Missed' && t.outcome !== 'Flat') {
       state.journals[journalIdx].accountSize += (t.outcome === 'Win' ? -t.dollarAmount : t.dollarAmount);
     }
     // Clean up images
@@ -2451,7 +2488,7 @@ function exportPDF(trades, from, to) {
   const j = currentJournal();
   const dateRange = from || to ? ` (${from||'start'} → ${to||'today'})` : '';
   const wins = trades.filter(t => t.outcome==='Win').length;
-  const totalPnl = trades.filter(t => t.outcome !== 'Missed').reduce((s,t) => s + (t.outcome==='Win'?t.dollarAmount:-t.dollarAmount), 0);
+  const totalPnl = trades.filter(t => t.outcome !== 'Missed' && t.outcome !== 'Flat').reduce((s,t) => s + (t.outcome==='Win'?t.dollarAmount:-t.dollarAmount), 0);
 
   // Header
   doc.setFillColor(13, 20, 36);
